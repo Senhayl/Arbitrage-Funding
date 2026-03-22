@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-const API_URL = "https://ton-backend.railway.app"; // 👈 remplace par ton URL Railway/Render après deploy
+const API_URL = "https://railway.com/project/e4ac1015-ad74-4383-a509-39ea70a9c932"; // 👈 remplace par ton URL Railway/Render après deploy
 
 const PLATFORMS = [
   { id: "avantis",  name: "Avantis",  chain: "Base",    color: "#22d3ee", accent: "#0e7490" },
