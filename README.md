@@ -44,6 +44,9 @@ Le frontend utilise cette logique:
 
 ## Deploy Railway (recommande: 2 services)
 
+Si le build Front affiche `npm: not found`, c'est que Railway a detecte Python au lieu de Node.
+Dans ce cas, utilise les Dockerfiles dedies ci-dessous.
+
 ### Service 1: API Python
 
 - Source: ce repo
@@ -51,11 +54,23 @@ Le frontend utilise cette logique:
 - Runtime: `runtime.txt`
 - Dependencies: `requirements_v2.txt`
 
+Alternative robuste:
+
+- Builder: Dockerfile
+- Dockerfile path: `Dockerfile.backend`
+
 ### Service 2: Frontend Vite
 
 - Build command: `npm install && npm run build`
 - Start command: `npm run preview -- --host 0.0.0.0 --port $PORT`
 - Variable env: `VITE_API_URL=<url-du-service-python>`
+
+Alternative robuste:
+
+- Builder: Dockerfile
+- Dockerfile path: `Dockerfile.frontend`
+
+Cette option evite les erreurs de detection runtime quand le meme repo contient a la fois Python et Node.
 
 ### Eviter la config manuelle a chaque deploy
 
