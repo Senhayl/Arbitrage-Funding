@@ -1,18 +1,79 @@
-# React + Vite
+# Arbitrage Funding
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Projet simplifie pour comparer les taux de funding entre GRVT et Extended, avec une page React (Vite) et une API FastAPI.
 
-Currently, two official plugins are available:
+## Structure
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `src/`: frontend React
+- `server.py`: backend FastAPI
+- `positions.json`: stockage local des positions suivies
+- `Procfile`: commande de demarrage Railway
 
-## React Compiler
+## Lancer en local
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+### 1) Backend
 
-Note: This will impact Vite dev & build performances.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements_v2.txt
+uvicorn server:app --reload --port 8000
+```
 
-## Expanding the ESLint configuration
+### 2) Frontend
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm install
+npm run dev
+```
+
+Frontend: http://localhost:5173
+Backend: http://localhost:8000
+
+Le frontend appelle par defaut `http://localhost:8000` en dev.
+
+## Variable d'environnement frontend
+
+- `VITE_API_URL`: URL publique du backend (ex: `https://mon-backend.up.railway.app`)
+
+Le frontend utilise cette logique:
+
+- en local: `http://localhost:8000` automatiquement
+- en prod: `VITE_API_URL` si defini
+- sinon: meme domaine que le frontend (appels relatifs `/api/...`)
+
+## Deploy Railway (recommande: 2 services)
+
+### Service 1: API Python
+
+- Source: ce repo
+- Start command: deja gere par `Procfile`
+- Runtime: `runtime.txt`
+- Dependencies: `requirements_v2.txt`
+
+### Service 2: Frontend Vite
+
+- Build command: `npm install && npm run build`
+- Start command: `npm run preview -- --host 0.0.0.0 --port $PORT`
+- Variable env: `VITE_API_URL=<url-du-service-python>`
+
+### Eviter la config manuelle a chaque deploy
+
+Option recommandee en 2 services Railway:
+
+- Dans le service Frontend, cree `VITE_API_URL` via une reference de variable vers le service Backend (depuis l'UI Railway, pas en dur).
+- Ainsi, si tu redesployes, tu n'as rien a recoller a la main.
+
+Option zero variable:
+
+- Heberger frontend et backend sur le meme service/domaine.
+- Dans ce cas, le frontend appelle automatiquement `/api/...`.
+
+## Endpoints utiles
+
+- `GET /health`
+- `GET /api/platforms`
+- `GET /api/funding?platform_a=extended&platform_b=grvt`
+- `GET /api/positions`
+- `POST /api/positions`
+- `DELETE /api/positions/{position_id}`
