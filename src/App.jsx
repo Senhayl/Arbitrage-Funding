@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000" : "");
+const PROD_API_FALLBACK = "https://back-end-production-5712.up.railway.app";
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000" : PROD_API_FALLBACK);
 
 const PLATFORMS = [
   { id: "extended", name: "Extended" },
