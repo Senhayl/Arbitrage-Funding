@@ -18,7 +18,6 @@ const resolveApiUrl = () => {
 const API_URL = resolveApiUrl()
 
 const PLATFORMS = [
-  { id: "avantis",  name: "Avantis",  chain: "Base",     color: "#4af",    type: "fee"     },
   { id: "grvt",     name: "GRVT",     chain: "GRVT L2",  color: "#a78bfa", type: "funding" },
   { id: "extended", name: "Extended", chain: "Starknet",  color: "#f97316", type: "funding" },
 ]
@@ -641,7 +640,7 @@ function PositionsPanel({ apiUrl }) {
 // ── APP ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [selected,      setSelected]      = useState(["avantis", "grvt"])
+  const [selected,      setSelected]      = useState(["extended", "grvt"])
   const [data,          setData]          = useState([])
   const [sortBy,        setSortBy]        = useState("best")
   const [loading,       setLoading]       = useState(false)
