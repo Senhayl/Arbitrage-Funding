@@ -2,9 +2,15 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
+const normalizeApiBase = (rawUrl) => {
+  const cleaned = rawUrl.trim().replace(/\/+$/, "")
+  // Railway env is often set as https://host/api; fetch calls already append /api.
+  return cleaned.replace(/\/api$/i, "")
+}
+
 const resolveApiUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL?.trim()
-  if (envUrl) return envUrl.replace(/\/+$/, "")
+  if (envUrl) return normalizeApiBase(envUrl)
 
   if (typeof window !== "undefined") {
     const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname)
@@ -16,6 +22,32 @@ const resolveApiUrl = () => {
 }
 
 const API_URL = resolveApiUrl()
+
+const fetchJson = async (url, options) => {
+  const res = await fetch(url, options)
+  const text = await res.text()
+  const contentType = res.headers.get("content-type") ?? ""
+
+  if (!res.ok) {
+    try {
+      const parsed = JSON.parse(text)
+      throw new Error(`HTTP ${res.status}${parsed?.detail ? ` - ${parsed.detail}` : ""}`)
+    } catch {
+      throw new Error(`HTTP ${res.status}`)
+    }
+  }
+
+  const maybeHtml = /^\s*<!doctype html|^\s*<html/i.test(text)
+  if (maybeHtml || contentType.includes("text/html")) {
+    throw new Error("Reponse HTML au lieu de JSON. Verifie VITE_API_URL (URL backend sans /api) et redeploie le frontend.")
+  }
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error("Reponse backend non JSON")
+  }
+}
 
 const PLATFORMS = [
   { id: "grvt",     name: "GRVT",     chain: "GRVT L2",  color: "#a78bfa", type: "funding" },
@@ -592,8 +624,7 @@ function PositionsPanel({ apiUrl }) {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch(`${apiUrl}/api/positions`)
-      const j = await r.json()
+      const j = await fetchJson(`${apiUrl}/api/positions`)
       setPositions(j.positions ?? [])
     } catch { /* backend offline */ }
   }, [apiUrl])
@@ -604,7 +635,7 @@ function PositionsPanel({ apiUrl }) {
 
   const handleSave = async (trade) => {
     try {
-      await fetch(`${apiUrl}/api/positions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(trade) })
+      await fetchJson(`${apiUrl}/api/positions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(trade) })
       setShowForm(false)
       load()
     } catch (e) { alert("Erreur: " + e.message) }
@@ -612,7 +643,7 @@ function PositionsPanel({ apiUrl }) {
 
   const handleDelete = async (id) => {
     if (!confirm("Supprimer ce trade ?")) return
-    await fetch(`${apiUrl}/api/positions/${id}`, { method: "DELETE" })
+    await fetchJson(`${apiUrl}/api/positions/${id}`, { method: "DELETE" })
     load()
   }
 
@@ -739,9 +770,7 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const r = await fetch(`${API_URL}/api/funding?platform_a=${platA}&platform_b=${platB}`)
-      if (!r.ok) throw new Error("HTTP " + r.status)
-      const j = await r.json()
+      const j = await fetchJson(`${API_URL}/api/funding?platform_a=${platA}&platform_b=${platB}`)
       const freshData = j.pairs ?? []
       setData(freshData)
       setServerOk(true)
@@ -749,8 +778,7 @@ export default function App() {
 
       // Récupère les positions puis vérifie les alertes
       try {
-        const rPos = await fetch(`${API_URL}/api/positions`)
-        const jPos = await rPos.json()
+        const jPos = await fetchJson(`${API_URL}/api/positions`)
         await checkAlerts(freshData, jPos.positions ?? [])
       } catch { /* positions inaccessibles — on ignore */ }
 
