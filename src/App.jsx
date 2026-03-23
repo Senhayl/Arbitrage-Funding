@@ -52,6 +52,8 @@ const PLATFORMS = [
 const TIER_ICON  = { fire: "🔥", good: "🟢", weak: "🟡", negative: "🔴" }
 const SORT_OPTIONS = [
   { key: "best",   label: "Meilleur APR" },
+  { key: "best7",  label: "Best APR 7j"  },
+  { key: "best30", label: "Best APR 30j" },
   { key: "symbol", label: "Paire A→Z"    },
   { key: "b_rate", label: "|Rate B|"     },
 ]
@@ -340,6 +342,10 @@ function PairCard({ row, platA, platB }) {
   const shortPlat = opp.short_platform
   const longPlat  = opp.long_platform
   const bRate     = side_b?.annualized_rate_pct ?? 0
+  const best7     = opp.best_7d_apr_pct
+  const best30    = opp.best_30d_apr_pct
+  const sample7   = opp.samples_7d ?? 0
+  const sample30  = opp.samples_30d ?? 0
   const aSrc      = side_a?.source ?? "mock"
   const bSrc      = side_b?.source ?? "mock"
 
@@ -384,6 +390,23 @@ function PairCard({ row, platA, platB }) {
             </span>
           </div>
         ))}
+
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <div className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-2 py-1">
+            <div className="text-[10px] uppercase tracking-wide text-cyan-200/80">Best 7j</div>
+            <div className="text-xs font-mono font-bold text-cyan-200 whitespace-nowrap">
+              {best7 == null ? "--" : fmtPct(best7, 2)}
+            </div>
+            <div className="text-[10px] text-cyan-200/60">{sample7} pts</div>
+          </div>
+          <div className="rounded-md border border-blue-400/20 bg-blue-400/10 px-2 py-1">
+            <div className="text-[10px] uppercase tracking-wide text-blue-200/80">Best 30j</div>
+            <div className="text-xs font-mono font-bold text-blue-200 whitespace-nowrap">
+              {best30 == null ? "--" : fmtPct(best30, 2)}
+            </div>
+            <div className="text-[10px] text-blue-200/60">{sample30} pts</div>
+          </div>
+        </div>
       </div>
 
       {/* Footer */}
@@ -423,6 +446,8 @@ function PairCard({ row, platA, platB }) {
 function CardsGrid({ data, sortBy, onSort, platA, platB }) {
   const sorted = [...data].sort((a, b) => {
     if (sortBy === "best")   return b.opportunity.best_net_pct - a.opportunity.best_net_pct
+    if (sortBy === "best7")  return (b.opportunity.best_7d_apr_pct ?? -999) - (a.opportunity.best_7d_apr_pct ?? -999)
+    if (sortBy === "best30") return (b.opportunity.best_30d_apr_pct ?? -999) - (a.opportunity.best_30d_apr_pct ?? -999)
     if (sortBy === "symbol") return a.symbol.localeCompare(b.symbol)
     if (sortBy === "b_rate") return Math.abs(b.side_b?.annualized_rate_pct ?? 0) - Math.abs(a.side_b?.annualized_rate_pct ?? 0)
     return 0

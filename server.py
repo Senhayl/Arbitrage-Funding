@@ -22,6 +22,7 @@ app.add_middleware(
 GRVT_BASE = "https://market-data.grvt.io"
 EXTENDED_BASE = "https://api.starknet.extended.exchange/api/v1"
 POSITIONS_FILE = Path("positions.json")
+HISTORY_FILE = Path("funding_history.json")
 
 SUPPORTED_PLATFORMS = {"grvt", "extended"}
 
@@ -49,6 +50,71 @@ def load_positions() -> list:
 
 def save_positions(positions: list) -> None:
     POSITIONS_FILE.write_text(json.dumps(positions, indent=2))
+
+
+def load_history() -> dict:
+    if HISTORY_FILE.exists():
+        try:
+            data = json.loads(HISTORY_FILE.read_text())
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            log.warning("funding_history.json invalide, reset historique")
+    return {}
+
+
+def save_history(history: dict) -> None:
+    HISTORY_FILE.write_text(json.dumps(history, indent=2))
+
+
+def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float) -> dict:
+    combo = history.setdefault(combo_key, {})
+
+    # On garde 30 jours glissants de mesures pour calculer les indicateurs 7j/30j.
+    cutoff_30d = now_ts - (30 * 24 * 3600)
+
+    for row in rows:
+        symbol = row["symbol"]
+        value = float(row["opportunity"]["best_net_pct"])
+        samples = combo.setdefault(symbol, [])
+        samples.append({"ts": now_ts, "best_net_pct": value})
+
+        combo[symbol] = [
+            s
+            for s in samples
+            if isinstance(s, dict)
+            and isinstance(s.get("ts"), (int, float))
+            and s["ts"] >= cutoff_30d
+        ]
+
+    return history
+
+
+def best_apr_windows(history: dict, combo_key: str, symbol: str, now_ts: float) -> dict:
+    combo = history.get(combo_key, {})
+    samples = combo.get(symbol, [])
+
+    vals_7d = [
+        float(s.get("best_net_pct", 0))
+        for s in samples
+        if isinstance(s, dict)
+        and isinstance(s.get("ts"), (int, float))
+        and s["ts"] >= now_ts - (7 * 24 * 3600)
+    ]
+    vals_30d = [
+        float(s.get("best_net_pct", 0))
+        for s in samples
+        if isinstance(s, dict)
+        and isinstance(s.get("ts"), (int, float))
+        and s["ts"] >= now_ts - (30 * 24 * 3600)
+    ]
+
+    return {
+        "best_7d_apr_pct": round(max(vals_7d), 3) if vals_7d else None,
+        "best_30d_apr_pct": round(max(vals_30d), 3) if vals_30d else None,
+        "samples_7d": len(vals_7d),
+        "samples_30d": len(vals_30d),
+    }
 
 
 def annualized_from_grvt(rate: float, interval_h: float) -> float:
@@ -206,6 +272,17 @@ async def get_funding(platform_a: str = "extended", platform_b: str = "grvt"):
         )
 
     rows.sort(key=lambda item: item["opportunity"]["best_net_pct"], reverse=True)
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+    combo_key = f"{platform_a}__{platform_b}"
+
+    history = load_history()
+    history = add_history_samples(history, combo_key, rows, now_ts)
+
+    for row in rows:
+        row["opportunity"].update(best_apr_windows(history, combo_key, row["symbol"], now_ts))
+
+    save_history(history)
 
     return {
         "timestamp": datetime.utcnow().isoformat() + "Z",
