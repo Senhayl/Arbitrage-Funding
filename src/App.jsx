@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ const sendTelegram = async (text) => {
   })
 }
 
-function TelegramConfig() {
+function TelegramConfig({ onConfigured }) {
   const saved = getTelegramConfig()
   const [token,  setToken]  = useState(saved.token)
   const [chatId, setChatId] = useState(saved.chatId)
@@ -56,6 +56,7 @@ function TelegramConfig() {
   const handleSave = () => {
     localStorage.setItem("telegram_token",   token.trim())
     localStorage.setItem("telegram_chat_id", chatId.trim())
+    onConfigured(Boolean(token.trim() && chatId.trim()))
     setStatus("ok")
     setTimeout(() => setStatus(null), 2000)
   }
@@ -64,6 +65,7 @@ function TelegramConfig() {
     // On sauvegarde d'abord pour utiliser les valeurs actuelles
     localStorage.setItem("telegram_token",   token.trim())
     localStorage.setItem("telegram_chat_id", chatId.trim())
+    onConfigured(Boolean(token.trim() && chatId.trim()))
     setStatus("testing")
     try {
       const res = await fetch(
@@ -580,16 +582,99 @@ function PositionsPanel({ apiUrl }) {
 // ── APP ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [selected,   setSelected]   = useState(["avantis", "grvt"])
-  const [data,       setData]       = useState([])
-  const [sortBy,     setSortBy]     = useState("best")
-  const [loading,    setLoading]    = useState(false)
-  const [serverOk,   setServerOk]   = useState(false)
-  const [lastUpdate, setLastUpdate] = useState(null)
-  const [error,      setError]      = useState(null)
+  const [selected,      setSelected]      = useState(["avantis", "grvt"])
+  const [data,          setData]          = useState([])
+  const [sortBy,        setSortBy]        = useState("best")
+  const [loading,       setLoading]       = useState(false)
+  const [serverOk,      setServerOk]      = useState(false)
+  const [lastUpdate,    setLastUpdate]    = useState(null)
+  const [error,         setError]         = useState(null)
+  const [telegramReady, setTelegramReady] = useState(
+    () => {
+      const { token, chatId } = getTelegramConfig()
+      return Boolean(token && chatId)
+    }
+  )
+
+  const sentAlerts = useRef(new Set())
 
   const platA = selected[0]
   const platB = selected[1]
+
+  // ── VÉRIFICATION DES ALERTES ────────────────────────────────────────────────
+  // Appelée après chaque refresh avec les données fraîches + positions en cours
+
+  const checkAlerts = useCallback(async (freshData, positions) => {
+    if (!telegramReady) return
+    if (!freshData.length || !positions.length) return
+
+    for (const pos of positions) {
+      const row = freshData.find((r) => r.symbol === pos.symbol)
+
+      // ── 1. ALERTE LIQUIDATION ──────────────────────────────────────────────
+      // On a besoin du prix actuel — on l'estime via le prix d'entrée moyen
+      // des deux sides (approximation acceptable sans flux de prix temps réel)
+      const avgEntry = (pos.short.entry_price + pos.long.entry_price) / 2
+
+      const shortLiqDist = Math.abs(pos.short.liq_price - avgEntry) / avgEntry
+      const longLiqDist  = Math.abs(pos.long.liq_price  - avgEntry) / avgEntry
+
+      // Alerte si la liquidation est à moins de 20% du prix d'entrée
+      if (shortLiqDist < 0.20) {
+        const key = `liq-short-${pos.id}`
+        if (!sentAlerts.current.has(key)) {
+          await sendTelegram(
+            `⚠️ LIQUIDATION PROCHE — ${pos.symbol} SHORT\n` +
+            `Plateforme : ${pos.short.platform.toUpperCase()}\n` +
+            `Prix liq : $${pos.short.liq_price}\n` +
+            `Distance : ${(shortLiqDist * 100).toFixed(1)}% du prix d'entrée\n` +
+            `Levier : ${pos.short.leverage}x`
+          )
+          sentAlerts.current.add(key)
+        }
+      } else {
+        // Si le danger est passé, on réinitialise pour pouvoir alerter à nouveau
+        sentAlerts.current.delete(`liq-short-${pos.id}`)
+      }
+
+      if (longLiqDist < 0.20) {
+        const key = `liq-long-${pos.id}`
+        if (!sentAlerts.current.has(key)) {
+          await sendTelegram(
+            `⚠️ LIQUIDATION PROCHE — ${pos.symbol} LONG\n` +
+            `Plateforme : ${pos.long.platform.toUpperCase()}\n` +
+            `Prix liq : $${pos.long.liq_price}\n` +
+            `Distance : ${(longLiqDist * 100).toFixed(1)}% du prix d'entrée\n` +
+            `Levier : ${pos.long.leverage}x`
+          )
+          sentAlerts.current.add(key)
+        }
+      } else {
+        sentAlerts.current.delete(`liq-long-${pos.id}`)
+      }
+
+      // ── 2. ALERTE FUNDING BAS ──────────────────────────────────────────────
+      if (row) {
+        const netPct = row.opportunity.best_net_pct
+
+        if (netPct < 5) {
+          const key = `funding-low-${pos.id}`
+          if (!sentAlerts.current.has(key)) {
+            await sendTelegram(
+              `📉 FUNDING BAS — ${pos.symbol}\n` +
+              `Taux net actuel : ${netPct.toFixed(2)}%/an\n` +
+              `La stratégie n'est plus rentable au seuil de 5%.\n` +
+              `Envisage de fermer la position.`
+            )
+            sentAlerts.current.add(key)
+          }
+        } else {
+          // Taux redevenu acceptable — on réinitialise
+          sentAlerts.current.delete(`funding-low-${pos.id}`)
+        }
+      }
+    }
+  }, [telegramReady])
 
   const refresh = useCallback(async () => {
     if (loading) return
@@ -599,16 +684,25 @@ export default function App() {
       const r = await fetch(`${API_URL}/api/funding?platform_a=${platA}&platform_b=${platB}`)
       if (!r.ok) throw new Error("HTTP " + r.status)
       const j = await r.json()
-      setData(j.pairs ?? [])
+      const freshData = j.pairs ?? []
+      setData(freshData)
       setServerOk(true)
       setLastUpdate(new Date().toLocaleTimeString())
+
+      // Récupère les positions puis vérifie les alertes
+      try {
+        const rPos = await fetch(`${API_URL}/api/positions`)
+        const jPos = await rPos.json()
+        await checkAlerts(freshData, jPos.positions ?? [])
+      } catch { /* positions inaccessibles — on ignore */ }
+
     } catch (e) {
       setServerOk(false)
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [platA, platB, loading])
+  }, [platA, platB, loading, checkAlerts])
 
   useEffect(() => {
     refresh()
@@ -642,7 +736,7 @@ export default function App() {
       ) : null}
 
       <PositionsPanel apiUrl={API_URL} />
-      <TelegramConfig />
+      <TelegramConfig onConfigured={setTelegramReady} />
     </div>
   )
 }
