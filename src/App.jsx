@@ -2,7 +2,20 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
+const resolveApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL?.trim()
+  if (envUrl) return envUrl.replace(/\/+$/, "")
+
+  if (typeof window !== "undefined") {
+    const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    if (isLocalhost) return "http://localhost:8000"
+    return window.location.origin
+  }
+
+  return "http://localhost:8000"
+}
+
+const API_URL = resolveApiUrl()
 
 const PLATFORMS = [
   { id: "avantis",  name: "Avantis",  chain: "Base",     color: "#4af",    type: "fee"     },
@@ -469,7 +482,7 @@ function PositionForm({ onSave, onCancel, symbols }) {
           {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         {[
           { label: "SHORT ↓", color: "#fca5a5", platK: "shortPlat", entryK: "shortEntry", levK: "shortLev", sizeK: "shortSize", liq: shortLiq },
           { label: "LONG ↑",  color: "#4ade80", platK: "longPlat",  entryK: "longEntry",  levK: "longLev",  sizeK: "longSize",  liq: longLiq  },
@@ -502,33 +515,20 @@ function PositionForm({ onSave, onCancel, symbols }) {
         ))}
       </div>
 
-      <div className={`rounded-xl border p-3 mb-4 ${efficiencyTag.bg}`}>
-        <div className="flex items-center justify-between gap-3 mb-2">
-          <div className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Diagnostic instantane</div>
-          <div className={`text-xs font-black uppercase tracking-wide ${efficiencyTag.color}`}>{efficiencyTag.label}</div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-xs font-mono mb-2">
-          <div className="rounded bg-white/5 border border-white/10 px-2 py-1.5">
-            <div className="text-gray-500 mb-0.5">Notionnel SHORT</div>
-            <div className="text-red-300">${shortNotional.toFixed(0)}</div>
-          </div>
-          <div className="rounded bg-white/5 border border-white/10 px-2 py-1.5">
-            <div className="text-gray-500 mb-0.5">Notionnel LONG</div>
-            <div className="text-green-300">${longNotional.toFixed(0)}</div>
-          </div>
-          <div className="rounded bg-white/5 border border-white/10 px-2 py-1.5">
-            <div className="text-gray-500 mb-0.5">Ecart</div>
-            <div className={gapPct <= 5 ? "text-green-300" : gapPct <= 10 ? "text-yellow-300" : "text-red-300"}>
-              {canEvaluate ? `${fmt(notionalGap.toFixed(0), true)}$ (${gapPct.toFixed(1)}%)` : "-"}
-            </div>
-          </div>
-        </div>
-        <div className="text-xs text-gray-400">
-          {canEvaluate ? `Ratio LONG/SHORT: ${ratio.toFixed(2)}x. ${efficiencyTag.tip}` : efficiencyTag.tip}
+      <div className={`rounded-lg border px-3 py-2 mb-4 ${efficiencyTag.bg}`}>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="uppercase tracking-wide text-gray-500 font-semibold">Diagnostic</span>
+          <span className={`font-black ${efficiencyTag.color}`}>{efficiencyTag.label}</span>
+          <span className="text-red-300">Short ${shortNotional.toFixed(0)}</span>
+          <span className="text-green-300">Long ${longNotional.toFixed(0)}</span>
+          <span className={gapPct <= 5 ? "text-green-300" : gapPct <= 10 ? "text-yellow-300" : "text-red-300"}>
+            Ecart {canEvaluate ? `${fmt(notionalGap.toFixed(0), true)}$ (${gapPct.toFixed(1)}%)` : "-"}
+          </span>
+          <span className="text-gray-400">Ratio {canEvaluate ? `${ratio.toFixed(2)}x` : "-"}</span>
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <button onClick={handleSave} disabled={!canSave}
           className="flex-1 bg-green-400 text-black font-bold text-sm py-2 rounded-lg hover:bg-green-300 transition-colors disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed">
           ✓ Enregistrer & activer alertes
@@ -551,21 +551,21 @@ function PositionItem({ pos, onDelete }) {
   const neutral       = gapPct <= 5
   return (
     <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <span className="font-black text-white">{pos.symbol}</span>
         <span className={`text-xs font-bold px-2 py-0.5 rounded ${neutral ? "bg-green-400/15 text-green-400" : "bg-yellow-400/15 text-yellow-400"}`}>
           {neutral ? "✓ Delta neutre" : "⚠ Desequilibre"}
         </span>
-        <span className={`text-xs font-mono px-2 py-0.5 rounded ${neutral ? "bg-green-400/10 text-green-300" : "bg-yellow-400/10 text-yellow-300"}`}>
-          {fmt(gapUsd.toFixed(0), true)}$ ({gapPct.toFixed(1)}%)
-        </span>
-        <span className="ml-auto text-xs text-gray-600">{new Date(pos.created_at).toLocaleDateString()}</span>
+        <span className="sm:ml-auto text-xs text-gray-600">{new Date(pos.created_at).toLocaleDateString()}</span>
         <button onClick={() => onDelete(pos.id)}
           className="text-xs px-2 py-1 rounded bg-red-400/10 border border-red-400/20 text-red-400 hover:bg-red-400/20 transition-colors">
           ✕ Fermer
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+      <div className="text-xs text-gray-500 mb-3 font-mono">
+        Ecart notionnel: <span className={neutral ? "text-green-300" : "text-yellow-300"}>{fmt(gapUsd.toFixed(0), true)}$ ({gapPct.toFixed(1)}%)</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
         {[
           { data: s, color: "#fca5a5", label: "SHORT ↓" },
           { data: l, color: "#4ade80", label: "LONG ↑"  },
