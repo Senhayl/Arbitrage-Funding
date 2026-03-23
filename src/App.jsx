@@ -2,55 +2,46 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const normalizeApiBase = (rawUrl) => {
-  const cleaned = rawUrl.trim().replace(/\/+$/, "")
-  // Railway env is often set as https://host/api; fetch calls already append /api.
-  return cleaned.replace(/\/api$/i, "")
-}
+const normalizeApiBase = (rawUrl) => rawUrl.trim().replace(/\/+$/, "").replace(/\/api$/i, "")
 
-const resolveApiUrl = () => {
+const getConfiguredApiBase = () => {
   const runtimeUrl = window.__APP_CONFIG__?.VITE_API_URL?.trim()
-    || window.__APP_CONFIG__?.vite_api_url?.trim()
   if (runtimeUrl) return normalizeApiBase(runtimeUrl)
 
-  const envUrl = import.meta.env.VITE_API_URL?.trim()
-  if (envUrl) return normalizeApiBase(envUrl)
+  const buildUrl = import.meta.env.VITE_API_URL?.trim()
+  if (buildUrl) return normalizeApiBase(buildUrl)
 
-  if (typeof window !== "undefined") {
-    const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname)
-    if (isLocalhost) return "http://localhost:8000"
-    return window.location.origin
-  }
+  const isLocalhost = typeof window !== "undefined"
+    && ["localhost", "127.0.0.1"].includes(window.location.hostname)
 
-  return "http://localhost:8000"
+  return isLocalhost ? "http://localhost:8000" : window.location.origin
 }
 
-const API_URL = resolveApiUrl()
+const API_URL = getConfiguredApiBase()
 
 const fetchJson = async (url, options) => {
   const res = await fetch(url, options)
   const text = await res.text()
-  const contentType = res.headers.get("content-type") ?? ""
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase()
+  const looksLikeHtml = /^\s*<!doctype html|^\s*<html/i.test(text)
+
+  let parsed
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    parsed = null
+  }
 
   if (!res.ok) {
-    try {
-      const parsed = JSON.parse(text)
-      throw new Error(`HTTP ${res.status}${parsed?.detail ? ` - ${parsed.detail}` : ""}`)
-    } catch {
-      throw new Error(`HTTP ${res.status}`)
-    }
+    throw new Error(`HTTP ${res.status}${parsed?.detail ? ` - ${parsed.detail}` : ""}`)
   }
 
-  const maybeHtml = /^\s*<!doctype html|^\s*<html/i.test(text)
-  if (maybeHtml || contentType.includes("text/html")) {
-    throw new Error("Reponse HTML au lieu de JSON. Verifie VITE_API_URL (URL backend sans /api) et redeploie le frontend.")
+  if (looksLikeHtml || contentType.includes("text/html")) {
+    throw new Error("Reponse HTML au lieu de JSON. Verifie VITE_API_URL (sans /api) et redeploie le frontend.")
   }
 
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new Error("Reponse backend non JSON")
-  }
+  if (!parsed) throw new Error("Reponse backend non JSON")
+  return parsed
 }
 
 const PLATFORMS = [
@@ -68,6 +59,7 @@ const SORT_OPTIONS = [
 const platColor = (id) => PLATFORMS.find((p) => p.id === id)?.color ?? "#888"
 const platName  = (id) => PLATFORMS.find((p) => p.id === id)?.name  ?? id
 const fmt       = (v, sign = false) => `${sign && v > 0 ? "+" : ""}${v}`
+const fmtPct    = (v, d = 2, sign = true) => `${sign && v > 0 ? "+" : ""}${Number(v).toFixed(d)}%`
 const calcLiq   = (entry, lev, side) => {
   const margin = (1 / lev) * 0.9
   return side === "short"
@@ -352,7 +344,7 @@ function PairCard({ row, platA, platB }) {
   const bSrc      = side_b?.source ?? "mock"
 
   return (
-    <div className="bg-[#0d1117] rounded-2xl overflow-hidden border-2 hover:-translate-y-0.5 transition-all"
+    <div className="bg-[#0d1117] rounded-2xl overflow-hidden border-2 hover:-translate-y-0.5 transition-all min-h-[320px] flex flex-col"
       style={{ borderColor: isPos ? "#4ade8033" : "#f8717133", borderLeftColor: isPos ? "#4ade80" : "#f87171", borderLeftWidth: 3 }}>
 
       {/* Top — symbol + APR */}
@@ -361,15 +353,15 @@ function PairCard({ row, platA, platB }) {
           {symbol} <span className="text-xs font-normal">{TIER_ICON[opp.tier] ?? "—"}</span>
         </div>
         <div className="text-right">
-          <div className="text-base font-black font-mono" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
-            {fmt(opp.best_net_pct, true)}%
+          <div className="text-lg font-black font-mono whitespace-nowrap" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
+            {fmtPct(opp.best_net_pct, 2)}
           </div>
           <div className="text-xs text-gray-600">/an</div>
         </div>
       </div>
 
       {/* Action box */}
-      <div className="mx-2 mt-2 mb-1.5 rounded-xl p-2.5 border"
+      <div className="mx-2 mt-2 mb-1.5 rounded-xl p-3 border flex-1"
         style={isPos
           ? { background: "linear-gradient(135deg,rgba(74,222,128,0.07),transparent 70%)", borderColor: "rgba(74,222,128,0.18)" }
           : { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" }}>
@@ -387,25 +379,25 @@ function PairCard({ row, platA, platB }) {
               {platName(plat)}
             </span>
             <span className="text-sm font-black w-16 flex-shrink-0" style={{ color: dirColor }}>{dir}</span>
-            <span className="ml-auto text-xs font-mono text-gray-600">
-              {fmt(Math.abs(rate).toFixed(2), true)}%/an
+            <span className="ml-auto text-xs font-mono text-gray-600 whitespace-nowrap">
+              {fmtPct(Math.abs(rate), 2, false)}/an
             </span>
           </div>
         ))}
       </div>
 
       {/* Footer */}
-      <div className="grid grid-cols-3 gap-1 px-3 pb-3 pt-1">
+      <div className="grid grid-cols-3 gap-2 px-3 pb-3 pt-2 mt-auto">
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Rate B</div>
-          <div className="text-xs font-mono font-semibold" style={{ color: bRate > 0 ? "#f8a" : "#8f8" }}>
-            {fmt(bRate.toFixed(1), true)}%
+          <div className="text-xs font-mono font-semibold whitespace-nowrap" style={{ color: bRate > 0 ? "#f8a" : "#8f8" }}>
+            {fmtPct(bRate, 1)}
           </div>
         </div>
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Net</div>
-          <div className="text-xs font-mono font-semibold" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
-            {fmt(opp.best_net_pct, true)}%
+          <div className="text-xs font-mono font-semibold whitespace-nowrap" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
+            {fmtPct(opp.best_net_pct, 2)}
           </div>
         </div>
         <div>
@@ -453,8 +445,8 @@ function CardsGrid({ data, sortBy, onSort, platA, platB }) {
         <span className="ml-auto text-xs text-gray-600">{data.length} paires</span>
       </div>
 
-      {/* ~5 cards par ligne */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+      {/* Cards plus larges: max 3 par ligne */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {sorted.map((row) => (
           <PairCard key={row.symbol} row={row} platA={platA} platB={platB} />
         ))}
