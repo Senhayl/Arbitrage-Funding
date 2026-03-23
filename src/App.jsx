@@ -424,16 +424,39 @@ function PositionForm({ onSave, onCancel, symbols }) {
     longPlat:  "grvt",     longEntry:  "", longLev:  3, longSize:  100,
   })
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const shortEntry = +form.shortEntry
+  const longEntry  = +form.longEntry
+  const shortLev   = +form.shortLev
+  const longLev    = +form.longLev
+  const shortSize  = +form.shortSize
+  const longSize   = +form.longSize
+
   const shortLiq = form.shortEntry ? calcLiq(+form.shortEntry, +form.shortLev, "short") : null
   const longLiq  = form.longEntry  ? calcLiq(+form.longEntry,  +form.longLev,  "long")  : null
 
+  const shortNotional = shortSize * shortLev
+  const longNotional  = longSize * longLev
+  const canEvaluate   = shortEntry > 0 && longEntry > 0 && shortLev > 0 && longLev > 0 && shortSize > 0 && longSize > 0
+  const notionalGap   = longNotional - shortNotional
+  const gapPct        = shortNotional > 0 ? (Math.abs(notionalGap) / shortNotional) * 100 : 0
+  const ratio         = shortNotional > 0 ? longNotional / shortNotional : 0
+  const efficiencyTag = !canEvaluate
+    ? { label: "Champs incomplets", color: "text-gray-400", bg: "bg-white/5 border-white/10", tip: "Renseigne entrées, tailles et leviers pour obtenir un verdict." }
+    : gapPct <= 2
+      ? { label: "Excellent", color: "text-green-400", bg: "bg-green-400/10 border-green-400/30", tip: "Position tres propre: couverture presque parfaite." }
+      : gapPct <= 5
+        ? { label: "Efficace", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/30", tip: "Bonne neutralite delta. Tu peux ouvrir dans cet etat." }
+        : gapPct <= 10
+          ? { label: "Moyen", color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/30", tip: "Ajuste size ou levier pour reduire le desequilibre." }
+          : { label: "Risque eleve", color: "text-red-400", bg: "bg-red-400/10 border-red-400/30", tip: "Desequilibre important: la position n'est pas vraiment delta-neutre." }
+  const canSave = canEvaluate
+
   const handleSave = () => {
-    if (!form.shortEntry || !form.longEntry) return alert("Entrez les prix d'entrée")
+    if (!canEvaluate) return alert("Renseigne des valeurs > 0 pour entree, taille et levier.")
     onSave({
-      id: "trade_" + Date.now(), symbol: form.symbol,
+      symbol: form.symbol,
       short: { platform: form.shortPlat, entry_price: +form.shortEntry, leverage: +form.shortLev, size_usd: +form.shortSize, liq_price: shortLiq },
       long:  { platform: form.longPlat,  entry_price: +form.longEntry,  leverage: +form.longLev,  size_usd: +form.longSize,  liq_price: longLiq  },
-      created_at: new Date().toISOString(),
     })
   }
 
@@ -478,9 +501,36 @@ function PositionForm({ onSave, onCancel, symbols }) {
           </div>
         ))}
       </div>
+
+      <div className={`rounded-xl border p-3 mb-4 ${efficiencyTag.bg}`}>
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Diagnostic instantane</div>
+          <div className={`text-xs font-black uppercase tracking-wide ${efficiencyTag.color}`}>{efficiencyTag.label}</div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-xs font-mono mb-2">
+          <div className="rounded bg-white/5 border border-white/10 px-2 py-1.5">
+            <div className="text-gray-500 mb-0.5">Notionnel SHORT</div>
+            <div className="text-red-300">${shortNotional.toFixed(0)}</div>
+          </div>
+          <div className="rounded bg-white/5 border border-white/10 px-2 py-1.5">
+            <div className="text-gray-500 mb-0.5">Notionnel LONG</div>
+            <div className="text-green-300">${longNotional.toFixed(0)}</div>
+          </div>
+          <div className="rounded bg-white/5 border border-white/10 px-2 py-1.5">
+            <div className="text-gray-500 mb-0.5">Ecart</div>
+            <div className={gapPct <= 5 ? "text-green-300" : gapPct <= 10 ? "text-yellow-300" : "text-red-300"}>
+              {canEvaluate ? `${fmt(notionalGap.toFixed(0), true)}$ (${gapPct.toFixed(1)}%)` : "-"}
+            </div>
+          </div>
+        </div>
+        <div className="text-xs text-gray-400">
+          {canEvaluate ? `Ratio LONG/SHORT: ${ratio.toFixed(2)}x. ${efficiencyTag.tip}` : efficiencyTag.tip}
+        </div>
+      </div>
+
       <div className="flex gap-2">
-        <button onClick={handleSave}
-          className="flex-1 bg-green-400 text-black font-bold text-sm py-2 rounded-lg hover:bg-green-300 transition-colors">
+        <button onClick={handleSave} disabled={!canSave}
+          className="flex-1 bg-green-400 text-black font-bold text-sm py-2 rounded-lg hover:bg-green-300 transition-colors disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed">
           ✓ Enregistrer & activer alertes
         </button>
         <button onClick={onCancel}
@@ -494,13 +544,20 @@ function PositionForm({ onSave, onCancel, symbols }) {
 
 function PositionItem({ pos, onDelete }) {
   const s = pos.short, l = pos.long
-  const neutral = Math.abs((l.size_usd * l.leverage) - (s.size_usd * s.leverage)) < s.size_usd * s.leverage * 0.05
+  const shortNotional = s.size_usd * s.leverage
+  const longNotional  = l.size_usd * l.leverage
+  const gapUsd        = longNotional - shortNotional
+  const gapPct        = shortNotional > 0 ? (Math.abs(gapUsd) / shortNotional) * 100 : 999
+  const neutral       = gapPct <= 5
   return (
     <div className="bg-white/5 border border-white/10 rounded-xl p-4">
       <div className="flex items-center gap-3 mb-3">
         <span className="font-black text-white">{pos.symbol}</span>
         <span className={`text-xs font-bold px-2 py-0.5 rounded ${neutral ? "bg-green-400/15 text-green-400" : "bg-yellow-400/15 text-yellow-400"}`}>
-          {neutral ? "✓ Delta neutre" : "⚠ Déséquilibré"}
+          {neutral ? "✓ Delta neutre" : "⚠ Desequilibre"}
+        </span>
+        <span className={`text-xs font-mono px-2 py-0.5 rounded ${neutral ? "bg-green-400/10 text-green-300" : "bg-yellow-400/10 text-yellow-300"}`}>
+          {fmt(gapUsd.toFixed(0), true)}$ ({gapPct.toFixed(1)}%)
         </span>
         <span className="ml-auto text-xs text-gray-600">{new Date(pos.created_at).toLocaleDateString()}</span>
         <button onClick={() => onDelete(pos.id)}
@@ -542,7 +599,9 @@ function PositionsPanel({ apiUrl }) {
     } catch { /* backend offline */ }
   }, [apiUrl])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    queueMicrotask(load)
+  }, [load])
 
   const handleSave = async (trade) => {
     try {
