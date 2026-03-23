@@ -9,6 +9,10 @@ const normalizeApiBase = (rawUrl) => {
 }
 
 const resolveApiUrl = () => {
+  const runtimeUrl = window.__APP_CONFIG__?.VITE_API_URL?.trim()
+    || window.__APP_CONFIG__?.vite_api_url?.trim()
+  if (runtimeUrl) return normalizeApiBase(runtimeUrl)
+
   const envUrl = import.meta.env.VITE_API_URL?.trim()
   if (envUrl) return normalizeApiBase(envUrl)
 
