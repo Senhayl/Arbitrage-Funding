@@ -11,10 +11,16 @@ const getConfiguredApiBase = () => {
   const buildUrl = import.meta.env.VITE_API_URL?.trim()
   if (buildUrl) return normalizeApiBase(buildUrl)
 
-  const isLocalhost = typeof window !== "undefined"
-    && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  const hostname = window.location.hostname
+  const isLocalhost = ["localhost", "127.0.0.1"].includes(hostname)
+  const isPrivateIp = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(hostname)
+  const isViteDevPort = ["5173", "4173"].includes(window.location.port)
 
-  return isLocalhost ? "http://localhost:8000" : window.location.origin
+  if (isLocalhost || isPrivateIp || isViteDevPort) {
+    return `http://${hostname}:8000`
+  }
+
+  return window.location.origin
 }
 
 const API_URL = getConfiguredApiBase()
@@ -710,6 +716,9 @@ export default function App() {
 
   const platA = selected[0]
   const platB = selected[1]
+  const hostname = typeof window !== "undefined" ? window.location.hostname : ""
+  const isRailwayHost = hostname.includes("railway.app")
+  const isLocalHost = ["localhost", "127.0.0.1"].includes(hostname)
 
   // ── VÉRIFICATION DES ALERTES ────────────────────────────────────────────────
   // Appelée après chaque refresh avec les données fraîches + positions en cours
@@ -824,8 +833,14 @@ export default function App() {
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-4 text-sm text-red-300">
-          ⚠ Backend inaccessible ({error}) — Lance{" "}
-          <code className="text-yellow-400 text-xs">python3 -m uvicorn server:app --reload --port 8000</code>
+          ⚠ Backend inaccessible ({error}) — {isRailwayHost
+            ? "Configure VITE_API_URL dans le service Frontend Railway vers l'URL publique du service Backend."
+            : isLocalHost
+              ? "Lance python3 -m uvicorn server:app --reload --port 8000"
+              : "Verifie l'URL API et la disponibilite du backend."}
+          <div className="mt-2 text-xs text-red-200/80 break-all">
+            API ciblee: {API_URL}
+          </div>
         </div>
       )}
 
