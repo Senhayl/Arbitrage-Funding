@@ -2,7 +2,21 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const normalizeApiBase = (rawUrl) => rawUrl.trim().replace(/\/+$/, "").replace(/\/api$/i, "")
+const normalizeApiBase = (rawUrl) => {
+  const cleaned = rawUrl.trim().replace(/\/+$/, "").replace(/\/api$/i, "")
+
+  // En prod HTTPS (Railway), une API en http:// provoque un "Failed to fetch"
+  // (mixed content) sans toucher le backend.
+  if (
+    typeof window !== "undefined"
+    && window.location.protocol === "https:"
+    && cleaned.startsWith("http://")
+  ) {
+    return `https://${cleaned.slice("http://".length)}`
+  }
+
+  return cleaned
+}
 
 const getConfiguredApiBase = () => {
   const runtimeUrl = window.__APP_CONFIG__?.VITE_API_URL?.trim()
