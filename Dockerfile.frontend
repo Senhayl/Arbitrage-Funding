@@ -10,4 +10,4 @@ RUN npm run build
 
 RUN npm install -g serve
 
-CMD ["sh", "-c", "API_URL=\"${VITE_API_URL:-${vite_api_url:-}}\"; printf 'window.__APP_CONFIG__ = { VITE_API_URL: \"%s\" };\\n' \"${API_URL}\" > /app/dist/env.js && serve -s dist -l ${PORT:-8080}"]
+CMD ["sh", "-c", "API_URL=$(printf '%s' \"${VITE_API_URL:-}\" | tr -d '\\r\\n'); if [ -z \"$API_URL\" ]; then echo 'ERROR: VITE_API_URL is required for frontend runtime config' >&2; exit 1; fi; printf 'window.__APP_CONFIG__ = { VITE_API_URL: \"%s\" };\\n' \"$API_URL\" > /app/dist/env.js && echo \"Using VITE_API_URL=$API_URL\" && serve -s dist -l ${PORT:-8080}"]

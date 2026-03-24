@@ -64,6 +64,7 @@ Alternative robuste:
 - Build command: `npm install && npm run build`
 - Start command: `npm run preview -- --host 0.0.0.0 --port $PORT`
 - Variable env: `VITE_API_URL=<url-du-service-python>`
+- Important: utilise uniquement `VITE_API_URL` (pas `vite_api_url`) pour eviter les ambiguities.
 
 Alternative robuste:
 
@@ -71,6 +72,8 @@ Alternative robuste:
 - Dockerfile path: `Dockerfile.frontend`
 
 Cette option evite les erreurs de detection runtime quand le meme repo contient a la fois Python et Node.
+
+Avec `Dockerfile.frontend`, le conteneur echoue volontairement au demarrage si `VITE_API_URL` est vide, pour rendre l'erreur visible tout de suite dans les logs.
 
 ### Eviter la config manuelle a chaque deploy
 
