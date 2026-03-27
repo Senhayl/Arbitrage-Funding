@@ -268,27 +268,83 @@ function PlatformToggles({ selected, onChange }) {
 
 // ── STATS BAR ────────────────────────────────────────────────────────────────
 
-function StatsBar({ data }) {
+function StatsBar({ data, positions }) {
   if (!data.length) return null
-  const best  = data.reduce((b, c) => c.opportunity.best_net_pct > (b?.opportunity?.best_net_pct ?? -999) ? c : b, null)
+
   const pos   = data.filter((p) => p.opportunity.best_net_pct > 0).length
-  const isPos = (best?.opportunity?.best_net_pct ?? 0) > 0
+
+  // Paires des positions actives avec leur APR live
+  const livePositions = positions
+    .map((pos) => {
+      const row = data.find((r) => r.symbol === pos.symbol)
+      if (!row) return null
+      return {
+        symbol: pos.symbol,
+        apr:    row.opportunity.best_net_pct,
+        tier:   row.opportunity.tier,
+      }
+    })
+    .filter(Boolean)
 
   return (
-    <div className="flex gap-3 mb-5 flex-wrap">
-      {[
-        { label: "Meilleure opp",    value: best ? fmt(best.opportunity.best_net_pct, true) + "%" : "—", sub: best?.symbol ?? "—", hl: isPos },
-        { label: "Paires rentables", value: `${pos}/${data.length}`, sub: "delta neutral positif", hl: false },
-      ].map((c) => (
-        <div key={c.label} className="rounded-xl px-5 py-3 min-w-[130px] border"
-          style={c.hl
-            ? { background: "rgba(74,222,128,0.06)", borderColor: "rgba(74,222,128,0.3)" }
-            : { background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.06)" }}>
-          <div className="text-xs text-gray-600 uppercase tracking-widest font-semibold">{c.label}</div>
-          <div className={`text-xl font-black mt-1 mb-0.5 ${c.hl ? "text-green-400" : "text-white"}`}>{c.value}</div>
-          <div className="text-xs text-gray-600">{c.sub}</div>
-        </div>
-      ))}
+    <div className="flex gap-3 mb-5 flex-wrap items-stretch">
+
+      {/* Carte paires rentables — toujours visible */}
+      <div className="rounded-xl px-5 py-3 min-w-[130px] border"
+        style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.06)" }}>
+        <div className="text-xs text-gray-600 uppercase tracking-widest font-semibold">Paires rentables</div>
+        <div className="text-xl font-black mt-1 mb-0.5 text-white">{pos}/{data.length}</div>
+        <div className="text-xs text-gray-600">delta neutral positif</div>
+      </div>
+
+      {/* Cartes APR live des positions ouvertes */}
+      {livePositions.length > 0 ? (
+        livePositions.map(({ symbol, apr, tier }) => {
+          const isPos  = apr > 0
+          const isWarn = apr > 0 && apr < 5
+          return (
+            <div key={symbol}
+              className="rounded-xl px-4 py-3 border flex flex-col justify-between min-w-[120px]"
+              style={
+                isWarn
+                  ? { background: "rgba(251,146,60,0.06)", borderColor: "rgba(251,146,60,0.35)" }
+                  : isPos
+                  ? { background: "rgba(74,222,128,0.06)", borderColor: "rgba(74,222,128,0.3)" }
+                  : { background: "rgba(248,113,113,0.06)", borderColor: "rgba(248,113,113,0.3)" }
+              }>
+              <div className="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">
+                {symbol} {TIER_ICON[tier] ?? ""}
+              </div>
+              <div className="text-xl font-black font-mono"
+                style={{ color: isWarn ? "#fb923c" : isPos ? "#4ade80" : "#f87171" }}>
+                {fmt(apr, true)}%
+              </div>
+              <div className="text-xs mt-0.5"
+                style={{ color: isWarn ? "#fb923c99" : isPos ? "#4ade8077" : "#f8717177" }}>
+                {isWarn ? "⚠ Funding bas" : isPos ? "Position active" : "Négatif"}
+              </div>
+            </div>
+          )
+        })
+      ) : (
+        /* Aucune position — on affiche la meilleure opp à la place */
+        (() => {
+          const best  = data.reduce((b, c) => c.opportunity.best_net_pct > (b?.opportunity?.best_net_pct ?? -999) ? c : b, null)
+          const isPos = (best?.opportunity?.best_net_pct ?? 0) > 0
+          return (
+            <div className="rounded-xl px-5 py-3 min-w-[130px] border"
+              style={isPos
+                ? { background: "rgba(74,222,128,0.06)", borderColor: "rgba(74,222,128,0.3)" }
+                : { background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.06)" }}>
+              <div className="text-xs text-gray-600 uppercase tracking-widest font-semibold">Meilleure opp</div>
+              <div className={`text-xl font-black mt-1 mb-0.5 ${isPos ? "text-green-400" : "text-white"}`}>
+                {best ? fmt(best.opportunity.best_net_pct, true) + "%" : "—"}
+              </div>
+              <div className="text-xs text-gray-600">{best?.symbol ?? "—"}</div>
+            </div>
+          )
+        })()
+      )}
     </div>
   )
 }
@@ -626,6 +682,7 @@ function PositionsPanel({ apiUrl }) {
 export default function App() {
   const [selected,      setSelected]      = useState(["avantis", "grvt"])
   const [data,          setData]          = useState([])
+  const [positions,     setPositions]     = useState([])
   const [sortBy,        setSortBy]        = useState("best")
   const [loading,       setLoading]       = useState(false)
   const [serverOk,      setServerOk]      = useState(false)
@@ -735,7 +792,9 @@ export default function App() {
       try {
         const rPos = await fetch(`${API_URL}/api/positions`)
         const jPos = await rPos.json()
-        await checkAlerts(freshData, jPos.positions ?? [])
+        const freshPositions = jPos.positions ?? []
+        setPositions(freshPositions)
+        await checkAlerts(freshData, freshPositions)
       } catch { /* positions inaccessibles — on ignore */ }
 
     } catch (e) {
@@ -764,7 +823,7 @@ export default function App() {
         </div>
       )}
 
-      <StatsBar data={data} />
+      <StatsBar data={data} positions={positions} />
 
       {loading && !data.length ? (
         <div className="text-center py-16 text-gray-600">
