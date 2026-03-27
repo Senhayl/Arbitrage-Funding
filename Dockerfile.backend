@@ -4,6 +4,7 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DATA_DIR=/data
 
 COPY requirements_v2.txt ./
 RUN pip install --no-cache-dir -r requirements_v2.txt

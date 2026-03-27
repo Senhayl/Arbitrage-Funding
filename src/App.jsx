@@ -2,86 +2,25 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const normalizeApiBase = (rawUrl) => {
-  const cleaned = rawUrl.trim().replace(/\/+$/, "").replace(/\/api$/i, "")
-
-  // En prod HTTPS (Railway), une API en http:// provoque un "Failed to fetch"
-  // (mixed content) sans toucher le backend.
-  if (
-    typeof window !== "undefined"
-    && window.location.protocol === "https:"
-    && cleaned.startsWith("http://")
-  ) {
-    return `https://${cleaned.slice("http://".length)}`
-  }
-
-  return cleaned
-}
-
-const getConfiguredApiBase = () => {
-  const runtimeUrl = window.__APP_CONFIG__?.VITE_API_URL?.trim()
-  if (runtimeUrl) return normalizeApiBase(runtimeUrl)
-
-  const buildUrl = import.meta.env.VITE_API_URL?.trim()
-  if (buildUrl) return normalizeApiBase(buildUrl)
-
-  const hostname = window.location.hostname
-  const isLocalhost = ["localhost", "127.0.0.1"].includes(hostname)
-  const isPrivateIp = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(hostname)
-  const isViteDevPort = ["5173", "4173"].includes(window.location.port)
-
-  if (isLocalhost || isPrivateIp || isViteDevPort) {
-    return `http://${hostname}:8000`
-  }
-
-  return window.location.origin
-}
-
-const API_URL = getConfiguredApiBase()
-
-const fetchJson = async (url, options) => {
-  const res = await fetch(url, options)
-  const text = await res.text()
-  const contentType = (res.headers.get("content-type") ?? "").toLowerCase()
-  const looksLikeHtml = /^\s*<!doctype html|^\s*<html/i.test(text)
-
-  let parsed
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    parsed = null
-  }
-
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}${parsed?.detail ? ` - ${parsed.detail}` : ""}`)
-  }
-
-  if (looksLikeHtml || contentType.includes("text/html")) {
-    throw new Error("Reponse HTML au lieu de JSON. Verifie VITE_API_URL (sans /api) et redeploie le frontend.")
-  }
-
-  if (!parsed) throw new Error("Reponse backend non JSON")
-  return parsed
-}
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 const PLATFORMS = [
+  { id: "avantis",  name: "Avantis",  chain: "Base",     color: "#4af",    type: "fee"     },
   { id: "grvt",     name: "GRVT",     chain: "GRVT L2",  color: "#a78bfa", type: "funding" },
   { id: "extended", name: "Extended", chain: "Starknet",  color: "#f97316", type: "funding" },
 ]
 
 const TIER_ICON  = { fire: "🔥", good: "🟢", weak: "🟡", negative: "🔴" }
 const SORT_OPTIONS = [
-  { key: "best",   label: "Meilleur APR" },
-  { key: "best7",  label: "Best APR 7j"  },
-  { key: "best30", label: "Best APR 30j" },
-  { key: "symbol", label: "Paire A→Z"    },
-  { key: "b_rate", label: "|Rate B|"     },
+  { key: "best",      label: "Meilleur APR"  },
+  { key: "stability", label: "Stabilité"     },
+  { key: "symbol",    label: "Paire A→Z"     },
+  { key: "b_rate",    label: "|Rate B|"      },
 ]
 
 const platColor = (id) => PLATFORMS.find((p) => p.id === id)?.color ?? "#888"
 const platName  = (id) => PLATFORMS.find((p) => p.id === id)?.name  ?? id
 const fmt       = (v, sign = false) => `${sign && v > 0 ? "+" : ""}${v}`
-const fmtPct    = (v, d = 2, sign = true) => `${sign && v > 0 ? "+" : ""}${Number(v).toFixed(d)}%`
 const calcLiq   = (entry, lev, side) => {
   const margin = (1 / lev) * 0.9
   return side === "short"
@@ -362,15 +301,31 @@ function PairCard({ row, platA, platB }) {
   const shortPlat = opp.short_platform
   const longPlat  = opp.long_platform
   const bRate     = side_b?.annualized_rate_pct ?? 0
-  const best7     = opp.best_7d_apr_pct
-  const best30    = opp.best_30d_apr_pct
-  const sample7   = opp.samples_7d ?? 0
-  const sample30  = opp.samples_30d ?? 0
   const aSrc      = side_a?.source ?? "mock"
   const bSrc      = side_b?.source ?? "mock"
 
+  // Score de stabilité — on préfère 7j si suffisamment de données, sinon 30j
+  const stab7  = opp.stability_7d
+  const stab30 = opp.stability_30d
+  const stab   = stab7?.sample_count >= 3 ? stab7 : stab30
+  const score  = stab?.stability_score ?? null
+  const nSamples = stab?.sample_count ?? 0
+
+  // Couleur et label du score
+  const scoreColor = score === null ? "#555"
+    : score > 6  ? "#4ade80"   // vert — très stable
+    : score > 2  ? "#facc15"   // jaune — correct
+    : score > 0  ? "#fb923c"   // orange — instable
+    :              "#f87171"   // rouge — négatif/inutilisable
+
+  const scoreLabel = score === null ? "—"
+    : score > 6  ? "Stable"
+    : score > 2  ? "Correct"
+    : score > 0  ? "Instable"
+    :              "Négatif"
+
   return (
-    <div className="bg-[#0d1117] rounded-2xl overflow-hidden border-2 hover:-translate-y-0.5 transition-all min-h-[320px] flex flex-col"
+    <div className="bg-[#0d1117] rounded-2xl overflow-hidden border-2 hover:-translate-y-0.5 transition-all"
       style={{ borderColor: isPos ? "#4ade8033" : "#f8717133", borderLeftColor: isPos ? "#4ade80" : "#f87171", borderLeftWidth: 3 }}>
 
       {/* Top — symbol + APR */}
@@ -379,15 +334,15 @@ function PairCard({ row, platA, platB }) {
           {symbol} <span className="text-xs font-normal">{TIER_ICON[opp.tier] ?? "—"}</span>
         </div>
         <div className="text-right">
-          <div className="text-lg font-black font-mono whitespace-nowrap" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
-            {fmtPct(opp.best_net_pct, 2)}
+          <div className="text-base font-black font-mono" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
+            {fmt(opp.best_net_pct, true)}%
           </div>
           <div className="text-xs text-gray-600">/an</div>
         </div>
       </div>
 
       {/* Action box */}
-      <div className="mx-2 mt-2 mb-1.5 rounded-xl p-3 border flex-1"
+      <div className="mx-2 mt-2 mb-1.5 rounded-xl p-2.5 border"
         style={isPos
           ? { background: "linear-gradient(135deg,rgba(74,222,128,0.07),transparent 70%)", borderColor: "rgba(74,222,128,0.18)" }
           : { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" }}>
@@ -405,44 +360,43 @@ function PairCard({ row, platA, platB }) {
               {platName(plat)}
             </span>
             <span className="text-sm font-black w-16 flex-shrink-0" style={{ color: dirColor }}>{dir}</span>
-            <span className="ml-auto text-xs font-mono text-gray-600 whitespace-nowrap">
-              {fmtPct(Math.abs(rate), 2, false)}/an
+            <span className="ml-auto text-xs font-mono text-gray-600">
+              {fmt(Math.abs(rate).toFixed(2), true)}%/an
             </span>
           </div>
         ))}
-
-        <div className="mt-2 grid grid-cols-2 gap-1.5">
-          <div className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-2 py-1">
-            <div className="text-[10px] uppercase tracking-wide text-cyan-200/80">Best 7j</div>
-            <div className="text-xs font-mono font-bold text-cyan-200 whitespace-nowrap">
-              {best7 == null ? "--" : fmtPct(best7, 2)}
-            </div>
-            <div className="text-[10px] text-cyan-200/60">{sample7} pts</div>
-          </div>
-          <div className="rounded-md border border-blue-400/20 bg-blue-400/10 px-2 py-1">
-            <div className="text-[10px] uppercase tracking-wide text-blue-200/80">Best 30j</div>
-            <div className="text-xs font-mono font-bold text-blue-200 whitespace-nowrap">
-              {best30 == null ? "--" : fmtPct(best30, 2)}
-            </div>
-            <div className="text-[10px] text-blue-200/60">{sample30} pts</div>
-          </div>
-        </div>
       </div>
 
-      {/* Footer */}
-      <div className="grid grid-cols-3 gap-2 px-3 pb-3 pt-2 mt-auto">
+      {/* Footer — 4 colonnes : Rate B / Net / Stabilité / Sources */}
+      <div className="grid grid-cols-4 gap-1 px-3 pb-3 pt-1">
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Rate B</div>
-          <div className="text-xs font-mono font-semibold whitespace-nowrap" style={{ color: bRate > 0 ? "#f8a" : "#8f8" }}>
-            {fmtPct(bRate, 1)}
+          <div className="text-xs font-mono font-semibold" style={{ color: bRate > 0 ? "#f8a" : "#8f8" }}>
+            {fmt(bRate.toFixed(1), true)}%
           </div>
         </div>
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Net</div>
-          <div className="text-xs font-mono font-semibold whitespace-nowrap" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
-            {fmtPct(opp.best_net_pct, 2)}
+          <div className="text-xs font-mono font-semibold" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
+            {fmt(opp.best_net_pct, true)}%
           </div>
         </div>
+
+        {/* Score de stabilité */}
+        <div>
+          <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Stabilité</div>
+          {score === null ? (
+            <div className="text-xs text-gray-700 font-mono" title={`${nSamples} mesure(s) — min. 3 requises`}>
+              En cours…
+            </div>
+          ) : (
+            <div className="text-xs font-bold" style={{ color: scoreColor }}
+              title={`Score: ${score} | Moyenne: ${stab?.mean_apr}% | Consistance: ${(stab?.consistency * 100).toFixed(0)}% | Volatilité: ${stab?.volatility}`}>
+              {score.toFixed(1)} <span className="font-normal opacity-70">{scoreLabel}</span>
+            </div>
+          )}
+        </div>
+
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Sources</div>
           <div className="flex gap-1 mt-0.5">
@@ -465,11 +419,14 @@ function PairCard({ row, platA, platB }) {
 
 function CardsGrid({ data, sortBy, onSort, platA, platB }) {
   const sorted = [...data].sort((a, b) => {
-    if (sortBy === "best")   return b.opportunity.best_net_pct - a.opportunity.best_net_pct
-    if (sortBy === "best7")  return (b.opportunity.best_7d_apr_pct ?? -999) - (a.opportunity.best_7d_apr_pct ?? -999)
-    if (sortBy === "best30") return (b.opportunity.best_30d_apr_pct ?? -999) - (a.opportunity.best_30d_apr_pct ?? -999)
-    if (sortBy === "symbol") return a.symbol.localeCompare(b.symbol)
-    if (sortBy === "b_rate") return Math.abs(b.side_b?.annualized_rate_pct ?? 0) - Math.abs(a.side_b?.annualized_rate_pct ?? 0)
+    if (sortBy === "best")      return b.opportunity.best_net_pct - a.opportunity.best_net_pct
+    if (sortBy === "symbol")    return a.symbol.localeCompare(b.symbol)
+    if (sortBy === "b_rate")    return Math.abs(b.side_b?.annualized_rate_pct ?? 0) - Math.abs(a.side_b?.annualized_rate_pct ?? 0)
+    if (sortBy === "stability") {
+      const scoreA = a.opportunity.stability_7d?.stability_score ?? a.opportunity.stability_30d?.stability_score ?? -1
+      const scoreB = b.opportunity.stability_7d?.stability_score ?? b.opportunity.stability_30d?.stability_score ?? -1
+      return scoreB - scoreA
+    }
     return 0
   })
 
@@ -490,8 +447,8 @@ function CardsGrid({ data, sortBy, onSort, platA, platB }) {
         <span className="ml-auto text-xs text-gray-600">{data.length} paires</span>
       </div>
 
-      {/* Cards plus larges: max 3 par ligne */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* ~5 cards par ligne */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
         {sorted.map((row) => (
           <PairCard key={row.symbol} row={row} platA={platA} platB={platB} />
         ))}
@@ -509,39 +466,16 @@ function PositionForm({ onSave, onCancel, symbols }) {
     longPlat:  "grvt",     longEntry:  "", longLev:  3, longSize:  100,
   })
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
-  const shortEntry = +form.shortEntry
-  const longEntry  = +form.longEntry
-  const shortLev   = +form.shortLev
-  const longLev    = +form.longLev
-  const shortSize  = +form.shortSize
-  const longSize   = +form.longSize
-
   const shortLiq = form.shortEntry ? calcLiq(+form.shortEntry, +form.shortLev, "short") : null
   const longLiq  = form.longEntry  ? calcLiq(+form.longEntry,  +form.longLev,  "long")  : null
 
-  const shortNotional = shortSize * shortLev
-  const longNotional  = longSize * longLev
-  const canEvaluate   = shortEntry > 0 && longEntry > 0 && shortLev > 0 && longLev > 0 && shortSize > 0 && longSize > 0
-  const notionalGap   = longNotional - shortNotional
-  const gapPct        = shortNotional > 0 ? (Math.abs(notionalGap) / shortNotional) * 100 : 0
-  const ratio         = shortNotional > 0 ? longNotional / shortNotional : 0
-  const efficiencyTag = !canEvaluate
-    ? { label: "Champs incomplets", color: "text-gray-400", bg: "bg-white/5 border-white/10", tip: "Renseigne entrées, tailles et leviers pour obtenir un verdict." }
-    : gapPct <= 2
-      ? { label: "Excellent", color: "text-green-400", bg: "bg-green-400/10 border-green-400/30", tip: "Position tres propre: couverture presque parfaite." }
-      : gapPct <= 5
-        ? { label: "Efficace", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/30", tip: "Bonne neutralite delta. Tu peux ouvrir dans cet etat." }
-        : gapPct <= 10
-          ? { label: "Moyen", color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/30", tip: "Ajuste size ou levier pour reduire le desequilibre." }
-          : { label: "Risque eleve", color: "text-red-400", bg: "bg-red-400/10 border-red-400/30", tip: "Desequilibre important: la position n'est pas vraiment delta-neutre." }
-  const canSave = canEvaluate
-
   const handleSave = () => {
-    if (!canEvaluate) return alert("Renseigne des valeurs > 0 pour entree, taille et levier.")
+    if (!form.shortEntry || !form.longEntry) return alert("Entrez les prix d'entrée")
     onSave({
-      symbol: form.symbol,
+      id: "trade_" + Date.now(), symbol: form.symbol,
       short: { platform: form.shortPlat, entry_price: +form.shortEntry, leverage: +form.shortLev, size_usd: +form.shortSize, liq_price: shortLiq },
       long:  { platform: form.longPlat,  entry_price: +form.longEntry,  leverage: +form.longLev,  size_usd: +form.longSize,  liq_price: longLiq  },
+      created_at: new Date().toISOString(),
     })
   }
 
@@ -554,7 +488,7 @@ function PositionForm({ onSave, onCancel, symbols }) {
           {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+      <div className="grid grid-cols-2 gap-3 mb-4">
         {[
           { label: "SHORT ↓", color: "#fca5a5", platK: "shortPlat", entryK: "shortEntry", levK: "shortLev", sizeK: "shortSize", liq: shortLiq },
           { label: "LONG ↑",  color: "#4ade80", platK: "longPlat",  entryK: "longEntry",  levK: "longLev",  sizeK: "longSize",  liq: longLiq  },
@@ -586,23 +520,9 @@ function PositionForm({ onSave, onCancel, symbols }) {
           </div>
         ))}
       </div>
-
-      <div className={`rounded-lg border px-3 py-2 mb-4 ${efficiencyTag.bg}`}>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="uppercase tracking-wide text-gray-500 font-semibold">Diagnostic</span>
-          <span className={`font-black ${efficiencyTag.color}`}>{efficiencyTag.label}</span>
-          <span className="text-red-300">Short ${shortNotional.toFixed(0)}</span>
-          <span className="text-green-300">Long ${longNotional.toFixed(0)}</span>
-          <span className={gapPct <= 5 ? "text-green-300" : gapPct <= 10 ? "text-yellow-300" : "text-red-300"}>
-            Ecart {canEvaluate ? `${fmt(notionalGap.toFixed(0), true)}$ (${gapPct.toFixed(1)}%)` : "-"}
-          </span>
-          <span className="text-gray-400">Ratio {canEvaluate ? `${ratio.toFixed(2)}x` : "-"}</span>
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-2">
-        <button onClick={handleSave} disabled={!canSave}
-          className="flex-1 bg-green-400 text-black font-bold text-sm py-2 rounded-lg hover:bg-green-300 transition-colors disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed">
+      <div className="flex gap-2">
+        <button onClick={handleSave}
+          className="flex-1 bg-green-400 text-black font-bold text-sm py-2 rounded-lg hover:bg-green-300 transition-colors">
           ✓ Enregistrer & activer alertes
         </button>
         <button onClick={onCancel}
@@ -616,28 +536,21 @@ function PositionForm({ onSave, onCancel, symbols }) {
 
 function PositionItem({ pos, onDelete }) {
   const s = pos.short, l = pos.long
-  const shortNotional = s.size_usd * s.leverage
-  const longNotional  = l.size_usd * l.leverage
-  const gapUsd        = longNotional - shortNotional
-  const gapPct        = shortNotional > 0 ? (Math.abs(gapUsd) / shortNotional) * 100 : 999
-  const neutral       = gapPct <= 5
+  const neutral = Math.abs((l.size_usd * l.leverage) - (s.size_usd * s.leverage)) < s.size_usd * s.leverage * 0.05
   return (
     <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+      <div className="flex items-center gap-3 mb-3">
         <span className="font-black text-white">{pos.symbol}</span>
         <span className={`text-xs font-bold px-2 py-0.5 rounded ${neutral ? "bg-green-400/15 text-green-400" : "bg-yellow-400/15 text-yellow-400"}`}>
-          {neutral ? "✓ Delta neutre" : "⚠ Desequilibre"}
+          {neutral ? "✓ Delta neutre" : "⚠ Déséquilibré"}
         </span>
-        <span className="sm:ml-auto text-xs text-gray-600">{new Date(pos.created_at).toLocaleDateString()}</span>
+        <span className="ml-auto text-xs text-gray-600">{new Date(pos.created_at).toLocaleDateString()}</span>
         <button onClick={() => onDelete(pos.id)}
           className="text-xs px-2 py-1 rounded bg-red-400/10 border border-red-400/20 text-red-400 hover:bg-red-400/20 transition-colors">
           ✕ Fermer
         </button>
       </div>
-      <div className="text-xs text-gray-500 mb-3 font-mono">
-        Ecart notionnel: <span className={neutral ? "text-green-300" : "text-yellow-300"}>{fmt(gapUsd.toFixed(0), true)}$ ({gapPct.toFixed(1)}%)</span>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+      <div className="grid grid-cols-2 gap-3 text-xs font-mono">
         {[
           { data: s, color: "#fca5a5", label: "SHORT ↓" },
           { data: l, color: "#4ade80", label: "LONG ↑"  },
@@ -665,18 +578,17 @@ function PositionsPanel({ apiUrl }) {
 
   const load = useCallback(async () => {
     try {
-      const j = await fetchJson(`${apiUrl}/api/positions`)
+      const r = await fetch(`${apiUrl}/api/positions`)
+      const j = await r.json()
       setPositions(j.positions ?? [])
     } catch { /* backend offline */ }
   }, [apiUrl])
 
-  useEffect(() => {
-    queueMicrotask(load)
-  }, [load])
+  useEffect(() => { load() }, [load])
 
   const handleSave = async (trade) => {
     try {
-      await fetchJson(`${apiUrl}/api/positions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(trade) })
+      await fetch(`${apiUrl}/api/positions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(trade) })
       setShowForm(false)
       load()
     } catch (e) { alert("Erreur: " + e.message) }
@@ -684,7 +596,7 @@ function PositionsPanel({ apiUrl }) {
 
   const handleDelete = async (id) => {
     if (!confirm("Supprimer ce trade ?")) return
-    await fetchJson(`${apiUrl}/api/positions/${id}`, { method: "DELETE" })
+    await fetch(`${apiUrl}/api/positions/${id}`, { method: "DELETE" })
     load()
   }
 
@@ -712,7 +624,7 @@ function PositionsPanel({ apiUrl }) {
 // ── APP ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [selected,      setSelected]      = useState(["extended", "grvt"])
+  const [selected,      setSelected]      = useState(["avantis", "grvt"])
   const [data,          setData]          = useState([])
   const [sortBy,        setSortBy]        = useState("best")
   const [loading,       setLoading]       = useState(false)
@@ -730,9 +642,6 @@ export default function App() {
 
   const platA = selected[0]
   const platB = selected[1]
-  const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-  const isRailwayHost = hostname.includes("railway.app")
-  const isLocalHost = ["localhost", "127.0.0.1"].includes(hostname)
 
   // ── VÉRIFICATION DES ALERTES ────────────────────────────────────────────────
   // Appelée après chaque refresh avec les données fraîches + positions en cours
@@ -814,7 +723,9 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const j = await fetchJson(`${API_URL}/api/funding?platform_a=${platA}&platform_b=${platB}`)
+      const r = await fetch(`${API_URL}/api/funding?platform_a=${platA}&platform_b=${platB}`)
+      if (!r.ok) throw new Error("HTTP " + r.status)
+      const j = await r.json()
       const freshData = j.pairs ?? []
       setData(freshData)
       setServerOk(true)
@@ -822,7 +733,8 @@ export default function App() {
 
       // Récupère les positions puis vérifie les alertes
       try {
-        const jPos = await fetchJson(`${API_URL}/api/positions`)
+        const rPos = await fetch(`${API_URL}/api/positions`)
+        const jPos = await rPos.json()
         await checkAlerts(freshData, jPos.positions ?? [])
       } catch { /* positions inaccessibles — on ignore */ }
 
@@ -847,14 +759,8 @@ export default function App() {
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-4 text-sm text-red-300">
-          ⚠ Backend inaccessible ({error}) — {isRailwayHost
-            ? "Configure VITE_API_URL dans le service Frontend Railway vers l'URL publique du service Backend."
-            : isLocalHost
-              ? "Lance python3 -m uvicorn server:app --reload --port 8000"
-              : "Verifie l'URL API et la disponibilite du backend."}
-          <div className="mt-2 text-xs text-red-200/80 break-all">
-            API ciblee: {API_URL}
-          </div>
+          ⚠ Backend inaccessible ({error}) — Lance{" "}
+          <code className="text-yellow-400 text-xs">python3 -m uvicorn server:app --reload --port 8000</code>
         </div>
       )}
 

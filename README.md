@@ -59,6 +59,16 @@ Alternative robuste:
 - Builder: Dockerfile
 - Dockerfile path: `Dockerfile.backend`
 
+Persistance des donnees backend (positions + historique APR 7j/30j):
+
+- Cree un Railway Volume et monte-le sur `/data` dans le service Backend.
+- Variable env recommandee sur le Backend: `DATA_DIR=/data`
+- Option avancee: tu peux definir explicitement:
+	- `POSITIONS_FILE_PATH=/data/positions.json`
+	- `FUNDING_HISTORY_FILE_PATH=/data/funding_history.json`
+
+Sans volume, les donnees sont ephemeres et seront perdues a chaque redeploy/restart.
+
 ### Service 2: Frontend Vite
 
 - Build command: `npm install && npm run build`
