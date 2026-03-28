@@ -2,28 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const normalizeApiUrl = (url) => (url ? String(url).trim().replace(/\/+$/, "") : "")
-const isLocalHost = typeof window !== "undefined"
-  && ["localhost", "127.0.0.1"].includes(window.location.hostname)
-
-const API_URL = normalizeApiUrl(
-  window?.__APP_CONFIG__?.VITE_API_URL
-  || import.meta.env.VITE_API_URL
-  || (isLocalHost ? "http://localhost:8000" : window?.location?.origin)
-)
-
-const parseJsonOrThrow = async (response, label) => {
-  const raw = await response.text()
-  if (!response.ok) throw new Error(`${label}: HTTP ${response.status}`)
-  try {
-    return JSON.parse(raw)
-  } catch {
-    const contentType = response.headers.get("content-type") ?? "inconnu"
-    const preview = raw.slice(0, 40).replace(/\s+/g, " ")
-    throw new Error(`${label}: réponse non JSON (${contentType}) "${preview}"`)
-  }
-}
-
+const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? "http://localhost:8000" : "https://back-end-production-5712.up.railway.app")
 const PLATFORMS = [
   { id: "grvt",     name: "GRVT",     chain: "GRVT L2",  color: "#a78bfa", type: "funding" },
   { id: "extended", name: "Extended", chain: "Starknet",  color: "#f97316", type: "funding" },
