@@ -2,7 +2,27 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const API_URL = import.meta.env.VITE_API_URL
+const normalizeApiUrl = (url) => (url ? String(url).trim().replace(/\/+$/, "") : "")
+const isLocalHost = typeof window !== "undefined"
+  && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+
+const API_URL = normalizeApiUrl(
+  window?.__APP_CONFIG__?.VITE_API_URL
+  || import.meta.env.VITE_API_URL
+  || (isLocalHost ? "http://localhost:8000" : window?.location?.origin)
+)
+
+const parseJsonOrThrow = async (response, label) => {
+  const raw = await response.text()
+  if (!response.ok) throw new Error(`${label}: HTTP ${response.status}`)
+  try {
+    return JSON.parse(raw)
+  } catch {
+    const contentType = response.headers.get("content-type") ?? "inconnu"
+    const preview = raw.slice(0, 40).replace(/\s+/g, " ")
+    throw new Error(`${label}: réponse non JSON (${contentType}) "${preview}"`)
+  }
+}
 
 const PLATFORMS = [
   { id: "grvt",     name: "GRVT",     chain: "GRVT L2",  color: "#a78bfa", type: "funding" },
@@ -632,9 +652,10 @@ function PositionsPanel({ apiUrl }) {
   const SYMBOLS = ["BTC/USD","ETH/USD","SOL/USD","DOGE/USD","ARB/USD","OP/USD","AVAX/USD","LINK/USD","XRP/USD"]
 
   const load = useCallback(async () => {
+    if (!apiUrl) return
     try {
       const r = await fetch(`${apiUrl}/api/positions`)
-      const j = await r.json()
+      const j = await parseJsonOrThrow(r, "Positions API")
       setPositions(j.positions ?? [])
     } catch { /* backend offline */ }
   }, [apiUrl])
@@ -776,12 +797,16 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     if (loading) return
+    if (!API_URL) {
+      setServerOk(false)
+      setError("URL API introuvable")
+      return
+    }
     setLoading(true)
     setError(null)
     try {
       const r = await fetch(`${API_URL}/api/funding?platform_a=${platA}&platform_b=${platB}`)
-      if (!r.ok) throw new Error("HTTP " + r.status)
-      const j = await r.json()
+      const j = await parseJsonOrThrow(r, "Funding API")
       const freshData = j.pairs ?? []
       setData(freshData)
       setServerOk(true)
@@ -790,7 +815,7 @@ export default function App() {
       // Récupère les positions puis vérifie les alertes
       try {
         const rPos = await fetch(`${API_URL}/api/positions`)
-        const jPos = await rPos.json()
+        const jPos = await parseJsonOrThrow(rPos, "Positions API")
         const freshPositions = jPos.positions ?? []
         setPositions(freshPositions)
         await checkAlerts(freshData, freshPositions)
