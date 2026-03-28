@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback, useRef } from "react"
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 const PLATFORMS = [
-  { id: "avantis",  name: "Avantis",  chain: "Base",     color: "#4af",    type: "fee"     },
   { id: "grvt",     name: "GRVT",     chain: "GRVT L2",  color: "#a78bfa", type: "funding" },
   { id: "extended", name: "Extended", chain: "Starknet",  color: "#f97316", type: "funding" },
 ]
@@ -680,7 +679,7 @@ function PositionsPanel({ apiUrl }) {
 // ── APP ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [selected,      setSelected]      = useState(["avantis", "grvt"])
+  const [selected,      setSelected]      = useState(["grvt", "extended"])
   const [data,          setData]          = useState([])
   const [positions,     setPositions]     = useState([])
   const [sortBy,        setSortBy]        = useState("best")
