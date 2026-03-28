@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
+const API_URL = import.meta.env.VITE_API_URL
 
 const PLATFORMS = [
   { id: "grvt",     name: "GRVT",     chain: "GRVT L2",  color: "#a78bfa", type: "funding" },
