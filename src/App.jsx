@@ -3,6 +3,19 @@ import { useState, useEffect, useCallback, useRef } from "react"
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? "http://localhost:8000" : "https://back-end-production-5712.up.railway.app")
+
+const parseJsonOrThrow = async (response, label) => {
+  const raw = await response.text()
+  if (!response.ok) throw new Error(`${label}: HTTP ${response.status}`)
+  try {
+    return JSON.parse(raw)
+  } catch {
+    const contentType = response.headers.get("content-type") ?? "inconnu"
+    const preview = raw.slice(0, 80).replace(/\s+/g, " ")
+    throw new Error(`${label}: réponse non JSON (${contentType}) "${preview}"`)
+  }
+}
+
 const PLATFORMS = [
   { id: "grvt",     name: "GRVT",     chain: "GRVT L2",  color: "#a78bfa", type: "funding" },
   { id: "extended", name: "Extended", chain: "Starknet",  color: "#f97316", type: "funding" },
