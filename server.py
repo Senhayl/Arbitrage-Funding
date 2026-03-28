@@ -340,6 +340,8 @@ async def get_funding(platform_a: str = "extended", platform_b: str = "grvt"):
 
         if not side_a or not side_b:
             continue
+        if side_a.get("source") == "unavailable" or side_b.get("source") == "unavailable":
+            continue
 
         rows.append({
             "symbol":     pair["symbol"],
