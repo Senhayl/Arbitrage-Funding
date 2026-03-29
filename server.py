@@ -209,8 +209,8 @@ def annualized_from_grvt(rate: float, interval_h: float) -> float:
 
 def annualized_from_extended(rate_pct: float, interval_h: float = 1.0) -> float:
     """
-    rate_pct   : taux retourné par Extended déjà en % (ex: 0.0016 = 0.0016%/période)
-    interval_h : intervalle de funding en heures (variable selon la paire)
+    rate_pct   : taux retourné par Extended déjà en % (ex: 0.000009 = 0.000009%/heure)
+    interval_h : intervalle de funding en heures (1h fixe pour Extended)
     """
     return rate_pct * (8760 / interval_h)
 
@@ -286,7 +286,6 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
         response.raise_for_status()
         markets = response.json().get("data") or []
 
-        now_ms = time.time() * 1000
         out = {}
         for market in markets:
             name = market.get("name")
@@ -294,26 +293,15 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
             if not name:
                 continue
 
-            # Le taux est une fraction — on le convertit en %
-            rate_pct = float(stats.get("fundingRate", 0)) * 100
-
-            # Calcul de l'intervalle depuis le prochain timestamp de funding
-            next_funding_ms = float(stats.get("nextFundingRate", 0))
-            if next_funding_ms > now_ms:
-                diff_h = (next_funding_ms - now_ms) / 3_600_000
-                if diff_h <= 1.5:
-                    interval_h = 1.0
-                elif diff_h <= 4.5:
-                    interval_h = 4.0
-                else:
-                    interval_h = 8.0
-            else:
-                interval_h = 1.0  # fallback
+            # Le taux est déjà en % chez Extended — pas de conversion × 100
+            rate_pct = float(stats.get("fundingRate", 0))
+            # Intervalle fixe 1h pour tous les perps Extended
+            interval_h = 1.0
 
             out[name] = {
                 "platform": "extended",
                 "instrument": name,
-                "funding_rate": round(rate_pct / 100, 8),  # on stocke la fraction originale
+                "funding_rate": round(rate_pct, 8),
                 "interval_hours": interval_h,
                 "annualized_rate_pct": round(annualized_from_extended(rate_pct, interval_h), 4),
                 "mark_price": float(stats.get("markPrice", 0)),
@@ -323,6 +311,7 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
     except Exception as exc:
         log.warning("Extended error: %s", exc)
         return {}
+
 
 @app.get("/health")
 async def health():
