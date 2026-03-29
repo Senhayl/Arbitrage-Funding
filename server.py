@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import math
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -285,6 +286,7 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
         response.raise_for_status()
         markets = response.json().get("data") or []
 
+        now_ms = time.time() * 1000
         out = {}
         for market in markets:
             name = market.get("name")
@@ -292,19 +294,28 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
             if not name:
                 continue
 
-				log.info("EXTENDED %s | market keys: %s | stats keys: %s", 
-             name, list(market.keys()), list(stats.keys()))
+            # Le taux est une fraction — on le convertit en %
+            rate_pct = float(stats.get("fundingRate", 0)) * 100
 
-            rate = float(stats.get("fundingRate", 0))
-            # L'intervalle est exprimé en secondes dans l'API Extended
-            interval_s = float(market.get("fundingPeriod") or stats.get("fundingPeriod") or 3600)
-            interval_h = interval_s / 3600
+            # Calcul de l'intervalle depuis le prochain timestamp de funding
+            next_funding_ms = float(stats.get("nextFundingRate", 0))
+            if next_funding_ms > now_ms:
+                diff_h = (next_funding_ms - now_ms) / 3_600_000
+                if diff_h <= 1.5:
+                    interval_h = 1.0
+                elif diff_h <= 4.5:
+                    interval_h = 4.0
+                else:
+                    interval_h = 8.0
+            else:
+                interval_h = 1.0  # fallback
+
             out[name] = {
                 "platform": "extended",
                 "instrument": name,
-                "funding_rate": round(rate, 8),
+                "funding_rate": round(rate_pct / 100, 8),  # on stocke la fraction originale
                 "interval_hours": interval_h,
-                "annualized_rate_pct": round(annualized_from_extended(rate, interval_h), 4),
+                "annualized_rate_pct": round(annualized_from_extended(rate_pct, interval_h), 4),
                 "mark_price": float(stats.get("markPrice", 0)),
                 "source": "live",
             }
@@ -312,7 +323,6 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
     except Exception as exc:
         log.warning("Extended error: %s", exc)
         return {}
-
 
 @app.get("/health")
 async def health():
