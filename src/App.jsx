@@ -391,6 +391,11 @@ function PairCard({ row, platA, platB }) {
     : score > 0  ? "Instable"
     :              "Négatif"
 
+  const shortSide = shortPlat === platA ? side_a : side_b
+  const longSide  = longPlat === platA ? side_a : side_b
+  const shortCarryPct = shortSide?.annualized_rate_pct ?? 0
+  const longCarryPct  = -(longSide?.annualized_rate_pct ?? 0)
+
   return (
     <div className="bg-[#0d1117] rounded-2xl overflow-hidden border-2 hover:-translate-y-0.5 transition-all"
       style={{ borderColor: isPos ? "#4ade8033" : "#f8717133", borderLeftColor: isPos ? "#4ade80" : "#f87171", borderLeftWidth: 3 }}>
@@ -418,9 +423,9 @@ function PairCard({ row, platA, platB }) {
         </div>
 
         {[
-          { plat: shortPlat, dir: "SHORT ↓", dirColor: "#fca5a5", rate: side_a?.annualized_rate_pct ?? 0 },
-          { plat: longPlat,  dir: "LONG ↑",  dirColor: "#4ade80", rate: side_b?.annualized_rate_pct ?? 0 },
-        ].map(({ plat, dir, dirColor, rate }, i) => (
+          { plat: shortPlat, dir: "SHORT ↓", dirColor: "#fca5a5", carry: shortCarryPct },
+          { plat: longPlat,  dir: "LONG ↑",  dirColor: "#4ade80", carry: longCarryPct  },
+        ].map(({ plat, dir, dirColor, carry }, i) => (
           <div key={i}
             className="flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/5 mb-1 last:mb-0">
             <span className="text-xs font-black uppercase tracking-wide w-14 flex-shrink-0" style={{ color: platColor(plat) }}>
@@ -428,7 +433,7 @@ function PairCard({ row, platA, platB }) {
             </span>
             <span className="text-sm font-black w-16 flex-shrink-0" style={{ color: dirColor }}>{dir}</span>
             <span className="ml-auto text-xs font-mono text-gray-600">
-              {fmt(Math.abs(rate).toFixed(2), true)}%/an
+              {fmt((carry ?? 0).toFixed(2), true)}%/an
             </span>
           </div>
         ))}
