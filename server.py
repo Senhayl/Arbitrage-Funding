@@ -292,6 +292,9 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
             if not name:
                 continue
 
+				log.info("EXTENDED %s | market keys: %s | stats keys: %s", 
+             name, list(market.keys()), list(stats.keys()))
+
             rate = float(stats.get("fundingRate", 0))
             # L'intervalle est exprimé en secondes dans l'API Extended
             interval_s = float(market.get("fundingPeriod") or stats.get("fundingPeriod") or 3600)
@@ -308,7 +311,6 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
         return out
     except Exception as exc:
         log.warning("Extended error: %s", exc)
-		log.info()
         return {}
 
 
