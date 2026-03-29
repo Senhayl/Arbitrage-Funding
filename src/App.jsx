@@ -391,8 +391,9 @@ function PairCard({ row, platA, platB }) {
     : score > 0  ? "Instable"
     :              "Négatif"
 
-  const shortSide = shortPlat === platA ? side_a : side_b
-  const longSide  = longPlat === platA ? side_a : side_b
+  const rowPlatA = row.platform_a
+  const shortSide = shortPlat === rowPlatA ? side_a : side_b
+  const longSide  = longPlat === rowPlatA ? side_a : side_b
   const shortCarryPct = shortSide?.annualized_rate_pct ?? 0
   const longCarryPct  = -(longSide?.annualized_rate_pct ?? 0)
 
