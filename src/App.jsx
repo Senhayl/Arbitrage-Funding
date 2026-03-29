@@ -31,7 +31,16 @@ const SORT_OPTIONS = [
 
 const platColor = (id) => PLATFORMS.find((p) => p.id === id)?.color ?? "#888"
 const platName  = (id) => PLATFORMS.find((p) => p.id === id)?.name  ?? id
-const fmt       = (v, sign = false) => `${sign && v > 0 ? "+" : ""}${v}`
+const normalizedPct = (value, decimals = 2, sign = true) => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return "—"
+
+  // Evite les rendus visuels du type "-0.0%" dus aux flottants.
+  const threshold = 0.5 * 10 ** -decimals
+  const safe = Math.abs(num) < threshold ? 0 : num
+  const prefix = safe > 0 && sign ? "+" : ""
+  return `${prefix}${safe.toFixed(decimals)}`
+}
 const calcLiq   = (entry, lev, side) => {
   const margin = (1 / lev) * 0.9
   return side === "short"
@@ -328,7 +337,7 @@ function StatsBar({ data, positions }) {
               </div>
               <div className="text-xl font-black font-mono"
                 style={{ color: isWarn ? "#fb923c" : isPos ? "#4ade80" : "#f87171" }}>
-                {fmt(apr, true)}%
+                {normalizedPct(apr, 3)}%
               </div>
               <div className="text-xs mt-0.5"
                 style={{ color: isWarn ? "#fb923c99" : isPos ? "#4ade8077" : "#f8717177" }}>
@@ -349,7 +358,7 @@ function StatsBar({ data, positions }) {
                 : { background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.06)" }}>
               <div className="text-xs text-gray-600 uppercase tracking-widest font-semibold">Meilleure opp</div>
               <div className={`text-xl font-black mt-1 mb-0.5 ${isPos ? "text-green-400" : "text-white"}`}>
-                {best ? fmt(best.opportunity.best_net_pct, true) + "%" : "—"}
+                {best ? normalizedPct(best.opportunity.best_net_pct, 3) + "%" : "—"}
               </div>
               <div className="text-xs text-gray-600">{best?.symbol ?? "—"}</div>
             </div>
@@ -409,7 +418,7 @@ function PairCard({ row, platA, platB }) {
         </div>
         <div className="text-right">
           <div className="text-base font-black font-mono" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
-            {fmt(opp.best_net_pct, true)}%
+            {normalizedPct(opp.best_net_pct, 3)}%
           </div>
           <div className="text-xs text-gray-600">/an</div>
         </div>
@@ -435,7 +444,7 @@ function PairCard({ row, platA, platB }) {
             </span>
             <span className="text-sm font-black w-16 flex-shrink-0" style={{ color: dirColor }}>{dir}</span>
             <span className="ml-auto text-xs font-mono text-gray-600">
-              {fmt((carry ?? 0).toFixed(2), true)}%/an
+              {normalizedPct(carry ?? 0, 2)}%/an
             </span>
           </div>
         ))}
@@ -445,14 +454,14 @@ function PairCard({ row, platA, platB }) {
       <div className="grid grid-cols-4 gap-1 px-3 pb-3 pt-1">
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Rate B</div>
-          <div className="text-xs font-mono font-semibold" style={{ color: bRate > 0 ? "#f8a" : "#8f8" }}>
-            {fmt(bRate.toFixed(1), true)}%
+          <div className="text-xs font-mono font-semibold" style={{ color: bRate > 0 ? "#f8a" : bRate < 0 ? "#8f8" : "#9ca3af" }}>
+            {normalizedPct(bRate, 2)}%
           </div>
         </div>
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Net</div>
           <div className="text-xs font-mono font-semibold" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
-            {fmt(opp.best_net_pct, true)}%
+            {normalizedPct(opp.best_net_pct, 3)}%
           </div>
         </div>
 
