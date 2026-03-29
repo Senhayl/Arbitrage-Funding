@@ -308,6 +308,7 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
         return out
     except Exception as exc:
         log.warning("Extended error: %s", exc)
+		log.info()
         return {}
 
 
