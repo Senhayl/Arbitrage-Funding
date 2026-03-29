@@ -206,8 +206,12 @@ def annualized_from_grvt(rate: float, interval_h: float) -> float:
     return rate * (8760 / interval_h)
 
 
-def annualized_from_extended(rate_per_hour_fraction: float) -> float:
-    return rate_per_hour_fraction * 8760 * 100
+def annualized_from_extended(rate_pct: float, interval_h: float = 1.0) -> float:
+    """
+    rate_pct   : taux retourné par Extended déjà en % (ex: 0.0016 = 0.0016%/période)
+    interval_h : intervalle de funding en heures (variable selon la paire)
+    """
+    return rate_pct * (8760 / interval_h)
 
 
 def compute_opp(side_a: dict, side_b: dict) -> dict:
@@ -289,12 +293,15 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
                 continue
 
             rate = float(stats.get("fundingRate", 0))
+            # L'intervalle est exprimé en secondes dans l'API Extended
+            interval_s = float(market.get("fundingPeriod") or stats.get("fundingPeriod") or 3600)
+            interval_h = interval_s / 3600
             out[name] = {
                 "platform": "extended",
                 "instrument": name,
                 "funding_rate": round(rate, 8),
-                "interval_hours": 1.0,
-                "annualized_rate_pct": round(annualized_from_extended(rate), 4),
+                "interval_hours": interval_h,
+                "annualized_rate_pct": round(annualized_from_extended(rate, interval_h), 4),
                 "mark_price": float(stats.get("markPrice", 0)),
                 "source": "live",
             }
