@@ -391,12 +391,12 @@ function PairCard({ row, platA, platB }) {
     : score > 0  ? "Instable"
     :              "Négatif"
 
-  const shortCarryPct = opp.best_strategy === "short_a_long_b"
-    ? (side_a?.annualized_rate_pct ?? 0)
-    : (side_b?.annualized_rate_pct ?? 0)
-  const longCarryPct = opp.best_strategy === "short_a_long_b"
-    ? -(side_b?.annualized_rate_pct ?? 0)
-    : -(side_a?.annualized_rate_pct ?? 0)
+  const sideByPlatform = {
+    [side_a?.platform]: side_a,
+    [side_b?.platform]: side_b,
+  }
+  const shortCarryPct = sideByPlatform[shortPlat]?.annualized_rate_pct ?? 0
+  const longCarryPct  = -(sideByPlatform[longPlat]?.annualized_rate_pct ?? 0)
 
   return (
     <div className="bg-[#0d1117] rounded-2xl overflow-hidden border-2 hover:-translate-y-0.5 transition-all"
