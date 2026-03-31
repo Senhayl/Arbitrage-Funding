@@ -102,17 +102,29 @@ def save_history(history: dict) -> None:
     HISTORY_FILE.write_text(json.dumps(history, indent=2))
 
 
-def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float) -> dict:
+def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float, all_symbols: list[str] | None = None) -> dict:
     combo = history.setdefault(combo_key, {})
 
     # On garde 30 jours glissants de mesures
     cutoff_30d = now_ts - (30 * 24 * 3600)
 
-    for row in rows:
-        symbol = row["symbol"]
-        value = float(row["opportunity"]["best_net_pct"])
+    row_by_symbol = {
+        row["symbol"]: float(row["opportunity"]["best_net_pct"])
+        for row in rows
+        if isinstance(row, dict) and "symbol" in row and "opportunity" in row
+    }
+
+    symbols_to_track = []
+    if all_symbols:
+        symbols_to_track.extend(all_symbols)
+    symbols_to_track.extend([s for s in combo.keys() if s not in symbols_to_track])
+    symbols_to_track.extend([s for s in row_by_symbol.keys() if s not in symbols_to_track])
+
+    for symbol in symbols_to_track:
         samples = combo.setdefault(symbol, [])
-        samples.append({"ts": now_ts, "best_net_pct": value})
+
+        if symbol in row_by_symbol:
+            samples.append({"ts": now_ts, "best_net_pct": row_by_symbol[symbol]})
 
         combo[symbol] = [
             s
@@ -367,7 +379,8 @@ async def get_funding(platform_a: str = "extended", platform_b: str = "grvt"):
     combo_key = f"{platform_a}__{platform_b}"
 
     history = load_history()
-    history = add_history_samples(history, combo_key, rows, now_ts)
+    combo_symbols = [pair["symbol"] for pair in PAIRS]
+    history = add_history_samples(history, combo_key, rows, now_ts, all_symbols=combo_symbols)
 
     for row in rows:
         row["opportunity"].update(best_apr_windows(history, combo_key, row["symbol"], now_ts))

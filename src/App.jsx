@@ -29,6 +29,8 @@ const SORT_OPTIONS = [
   { key: "b_rate",    label: "|Rate B|"      },
 ]
 
+const POSITION_SYMBOLS_FALLBACK = ["BTC/USD","ETH/USD","SOL/USD","DOGE/USD","ARB/USD","OP/USD","AVAX/USD","LINK/USD","XRP/USD"]
+
 const platColor = (id) => PLATFORMS.find((p) => p.id === id)?.color ?? "#888"
 const platName  = (id) => PLATFORMS.find((p) => p.id === id)?.name  ?? id
 const normalizedPct = (value, decimals = 2, sign = true) => {
@@ -552,6 +554,13 @@ function PositionForm({ onSave, onCancel, symbols }) {
   const shortLiq = form.shortEntry ? calcLiq(+form.shortEntry, +form.shortLev, "short") : null
   const longLiq  = form.longEntry  ? calcLiq(+form.longEntry,  +form.longLev,  "long")  : null
 
+  useEffect(() => {
+    if (!symbols.length) return
+    if (!symbols.includes(form.symbol)) {
+      setForm((f) => ({ ...f, symbol: symbols[0] }))
+    }
+  }, [symbols, form.symbol])
+
   const handleSave = () => {
     if (!form.shortEntry || !form.longEntry) return alert("Entrez les prix d'entrée")
     onSave({
@@ -657,7 +666,7 @@ function PositionItem({ pos, onDelete }) {
 function PositionsPanel({ apiUrl }) {
   const [positions, setPositions] = useState([])
   const [showForm,  setShowForm]  = useState(false)
-  const SYMBOLS = ["BTC/USD","ETH/USD","SOL/USD","DOGE/USD","ARB/USD","OP/USD","AVAX/USD","LINK/USD","XRP/USD"]
+  const [symbols, setSymbols] = useState(POSITION_SYMBOLS_FALLBACK)
 
   const load = useCallback(async () => {
     if (!apiUrl) return
@@ -668,7 +677,20 @@ function PositionsPanel({ apiUrl }) {
     } catch { /* backend offline */ }
   }, [apiUrl])
 
+  const loadSymbols = useCallback(async () => {
+    if (!apiUrl) return
+    try {
+      const r = await fetch(`${apiUrl}/api/funding?platform_a=extended&platform_b=grvt`)
+      const j = await parseJsonOrThrow(r, "Funding API")
+      const liveSymbols = (j.pairs ?? []).map((row) => row.symbol).filter(Boolean)
+      setSymbols(liveSymbols.length > 0 ? liveSymbols : POSITION_SYMBOLS_FALLBACK)
+    } catch {
+      setSymbols(POSITION_SYMBOLS_FALLBACK)
+    }
+  }, [apiUrl])
+
   useEffect(() => { load() }, [load])
+  useEffect(() => { loadSymbols() }, [loadSymbols])
 
   const handleSave = async (trade) => {
     try {
@@ -693,7 +715,7 @@ function PositionsPanel({ apiUrl }) {
           {showForm ? "Annuler" : "+ Nouveau trade"}
         </button>
       </div>
-      {showForm && <PositionForm onSave={handleSave} onCancel={() => setShowForm(false)} symbols={SYMBOLS} />}
+      {showForm && <PositionForm onSave={handleSave} onCancel={() => setShowForm(false)} symbols={symbols} />}
       {positions.length === 0 ? (
         <p className="text-xs text-gray-600 text-center py-6">Aucun trade surveillé — clique "+ Nouveau trade"</p>
       ) : (
