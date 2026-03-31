@@ -452,18 +452,12 @@ function PairCard({ row, platA, platB }) {
         ))}
       </div>
 
-      {/* Footer — 4 colonnes : Rate B / Net / Stabilité / Sources */}
-      <div className="grid grid-cols-4 gap-1 px-3 pb-3 pt-1">
+      {/* Footer — 3 colonnes : Rate B / Stabilité / Sources */}
+      <div className="grid grid-cols-3 gap-1 px-3 pb-3 pt-1">
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Rate B</div>
           <div className="text-xs font-mono font-semibold" style={{ color: bRate > 0 ? "#f8a" : bRate < 0 ? "#8f8" : "#9ca3af" }}>
             {normalizedPct(bRate, 2)}%
-          </div>
-        </div>
-        <div>
-          <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Net</div>
-          <div className="text-xs font-mono font-semibold" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
-            {normalizedPct(opp.best_net_pct, 3)}%
           </div>
         </div>
 
