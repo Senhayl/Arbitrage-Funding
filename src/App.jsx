@@ -30,6 +30,10 @@ const SORT_OPTIONS = [
 ]
 
 const POSITION_SYMBOLS_FALLBACK = ["BTC/USD","ETH/USD","SOL/USD","DOGE/USD","ARB/USD","OP/USD","AVAX/USD","LINK/USD","XRP/USD"]
+const YIELD_MODE = {
+  WEEKLY: "weekly",
+  ANNUAL: "annual",
+}
 
 const platColor = (id) => PLATFORMS.find((p) => p.id === id)?.color ?? "#888"
 const platName  = (id) => PLATFORMS.find((p) => p.id === id)?.name  ?? id
@@ -43,6 +47,10 @@ const normalizedPct = (value, decimals = 2, sign = true) => {
   const prefix = safe > 0 && sign ? "+" : ""
   return `${prefix}${safe.toFixed(decimals)}`
 }
+const yieldUnitLabel = (mode) => (mode === YIELD_MODE.WEEKLY ? "/7j" : "/an")
+const toDisplayYieldPct = (annualPct, mode) => (
+  mode === YIELD_MODE.WEEKLY ? annualPct / 52 : annualPct
+)
 const calcLiq   = (entry, lev, side) => {
   const margin = (1 / lev) * 0.9
   return side === "short"
@@ -290,7 +298,7 @@ function PlatformToggles({ selected, onChange }) {
 
 // ── STATS BAR ────────────────────────────────────────────────────────────────
 
-function StatsBar({ data, positions }) {
+function StatsBar({ data, positions, yieldMode }) {
   if (!data.length) return null
 
   const pos   = data.filter((p) => p.opportunity.best_net_pct > 0).length
@@ -302,7 +310,7 @@ function StatsBar({ data, positions }) {
       if (!row) return null
       return {
         symbol: pos.symbol,
-        apr:    row.opportunity.best_net_pct,
+        annualApr: row.opportunity.best_net_pct,
         tier:   row.opportunity.tier,
       }
     })
@@ -321,9 +329,10 @@ function StatsBar({ data, positions }) {
 
       {/* Cartes APR live des positions ouvertes */}
       {livePositions.length > 0 ? (
-        livePositions.map(({ symbol, apr, tier }) => {
-          const isPos  = apr > 0
-          const isWarn = apr > 0 && apr < 5
+        livePositions.map(({ symbol, annualApr, tier }) => {
+          const displayApr = toDisplayYieldPct(annualApr, yieldMode)
+          const isPos  = annualApr > 0
+          const isWarn = annualApr > 0 && annualApr < 5
           return (
             <div key={symbol}
               className="rounded-xl px-4 py-3 border flex flex-col justify-between min-w-[120px]"
@@ -339,7 +348,7 @@ function StatsBar({ data, positions }) {
               </div>
               <div className="text-xl font-black font-mono"
                 style={{ color: isWarn ? "#fb923c" : isPos ? "#4ade80" : "#f87171" }}>
-                {normalizedPct(apr, 3)}%
+                {normalizedPct(displayApr, 3)}%
               </div>
               <div className="text-xs mt-0.5"
                 style={{ color: isWarn ? "#fb923c99" : isPos ? "#4ade8077" : "#f8717177" }}>
@@ -360,9 +369,9 @@ function StatsBar({ data, positions }) {
                 : { background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.06)" }}>
               <div className="text-xs text-gray-600 uppercase tracking-widest font-semibold">Meilleure opp</div>
               <div className={`text-xl font-black mt-1 mb-0.5 ${isPos ? "text-green-400" : "text-white"}`}>
-                {best ? normalizedPct(best.opportunity.best_net_pct, 3) + "%" : "—"}
+                {best ? normalizedPct(toDisplayYieldPct(best.opportunity.best_net_pct, yieldMode), 3) + "%" : "—"}
               </div>
-              <div className="text-xs text-gray-600">{best?.symbol ?? "—"}</div>
+              <div className="text-xs text-gray-600">{best?.symbol ?? "—"} {best ? yieldUnitLabel(yieldMode) : ""}</div>
             </div>
           )
         })()
@@ -373,12 +382,13 @@ function StatsBar({ data, positions }) {
 
 // ── PAIR CARD ────────────────────────────────────────────────────────────────
 
-function PairCard({ row, platA, platB }) {
+function PairCard({ row, platA, platB, yieldMode }) {
   const { symbol, side_a, side_b, opportunity: opp } = row
   const isPos     = opp.best_net_pct > 0
   const shortPlat = opp.short_platform
   const longPlat  = opp.long_platform
-  const bRate     = side_b?.annualized_rate_pct ?? 0
+  const annualBRate = side_b?.annualized_rate_pct ?? 0
+  const bRate = toDisplayYieldPct(annualBRate, yieldMode)
   const aSrc      = side_a?.source ?? "mock"
   const bSrc      = side_b?.source ?? "mock"
 
@@ -406,8 +416,11 @@ function PairCard({ row, platA, platB }) {
     [side_a?.platform]: side_a,
     [side_b?.platform]: side_b,
   }
-  const shortCarryPct = sideByPlatform[shortPlat]?.annualized_rate_pct ?? 0
-  const longCarryPct  = -(sideByPlatform[longPlat]?.annualized_rate_pct ?? 0)
+  const shortCarryAnnualPct = sideByPlatform[shortPlat]?.annualized_rate_pct ?? 0
+  const longCarryAnnualPct  = -(sideByPlatform[longPlat]?.annualized_rate_pct ?? 0)
+  const shortCarryPct = toDisplayYieldPct(shortCarryAnnualPct, yieldMode)
+  const longCarryPct  = toDisplayYieldPct(longCarryAnnualPct, yieldMode)
+  const netDisplayPct = toDisplayYieldPct(opp.best_net_pct, yieldMode)
 
   return (
     <div className="bg-[#0d1117] rounded-2xl overflow-hidden border-2 hover:-translate-y-0.5 transition-all"
@@ -420,9 +433,9 @@ function PairCard({ row, platA, platB }) {
         </div>
         <div className="text-right">
           <div className="text-base font-black font-mono" style={{ color: isPos ? "#4ade80" : "#f87171" }}>
-            {normalizedPct(opp.best_net_pct, 3)}%
+            {normalizedPct(netDisplayPct, 3)}%
           </div>
-          <div className="text-xs text-gray-600">/an</div>
+          <div className="text-xs text-gray-600">{yieldUnitLabel(yieldMode)}</div>
         </div>
       </div>
 
@@ -446,7 +459,7 @@ function PairCard({ row, platA, platB }) {
             </span>
             <span className="text-sm font-black w-16 flex-shrink-0" style={{ color: dirColor }}>{dir}</span>
             <span className="ml-auto text-xs font-mono text-gray-600">
-              {normalizedPct(carry ?? 0, 2)}%/an
+              {normalizedPct(carry ?? 0, 2)}%{yieldUnitLabel(yieldMode)}
             </span>
           </div>
         ))}
@@ -457,7 +470,7 @@ function PairCard({ row, platA, platB }) {
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Rate B</div>
           <div className="text-xs font-mono font-semibold" style={{ color: bRate > 0 ? "#f8a" : bRate < 0 ? "#8f8" : "#9ca3af" }}>
-            {normalizedPct(bRate, 2)}%
+            {normalizedPct(bRate, 2)}%{yieldUnitLabel(yieldMode)}
           </div>
         </div>
 
@@ -496,7 +509,7 @@ function PairCard({ row, platA, platB }) {
 
 // ── CARDS GRID ────────────────────────────────────────────────────────────────
 
-function CardsGrid({ data, sortBy, onSort, platA, platB }) {
+function CardsGrid({ data, sortBy, onSort, platA, platB, yieldMode, onYieldModeChange }) {
   const sorted = [...data].sort((a, b) => {
     if (sortBy === "best")      return b.opportunity.best_net_pct - a.opportunity.best_net_pct
     if (sortBy === "symbol")    return a.symbol.localeCompare(b.symbol)
@@ -523,13 +536,35 @@ function CardsGrid({ data, sortBy, onSort, platA, platB }) {
             {s.label}
           </button>
         ))}
-        <span className="ml-auto text-xs text-gray-600">{data.length} paires</span>
+        <div className="ml-auto flex items-center gap-1 rounded-md border border-white/10 bg-white/5 p-0.5">
+          <button
+            onClick={() => onYieldModeChange(YIELD_MODE.WEEKLY)}
+            className={`text-xs font-semibold px-2.5 py-1 rounded ${
+              yieldMode === YIELD_MODE.WEEKLY
+                ? "bg-green-400/20 text-green-400"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            7j
+          </button>
+          <button
+            onClick={() => onYieldModeChange(YIELD_MODE.ANNUAL)}
+            className={`text-xs font-semibold px-2.5 py-1 rounded ${
+              yieldMode === YIELD_MODE.ANNUAL
+                ? "bg-green-400/20 text-green-400"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            Annuel
+          </button>
+        </div>
+        <span className="text-xs text-gray-600">{data.length} paires</span>
       </div>
 
       {/* ~5 cards par ligne */}
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
         {sorted.map((row) => (
-          <PairCard key={row.symbol} row={row} platA={platA} platB={platB} />
+          <PairCard key={row.symbol} row={row} platA={platA} platB={platB} yieldMode={yieldMode} />
         ))}
       </div>
     </div>
@@ -728,6 +763,7 @@ export default function App() {
   const [data,          setData]          = useState([])
   const [positions,     setPositions]     = useState([])
   const [sortBy,        setSortBy]        = useState("best")
+  const [yieldMode,     setYieldMode]     = useState(YIELD_MODE.WEEKLY)
   const [loading,       setLoading]       = useState(false)
   const [serverOk,      setServerOk]      = useState(false)
   const [lastUpdate,    setLastUpdate]    = useState(null)
@@ -871,7 +907,7 @@ export default function App() {
         </div>
       )}
 
-      <StatsBar data={data} positions={positions} />
+      <StatsBar data={data} positions={positions} yieldMode={yieldMode} />
 
       {loading && !data.length ? (
         <div className="text-center py-16 text-gray-600">
@@ -879,7 +915,15 @@ export default function App() {
           <p className="text-sm">Connexion au backend…</p>
         </div>
       ) : data.length > 0 ? (
-        <CardsGrid data={data} sortBy={sortBy} onSort={setSortBy} platA={platA} platB={platB} />
+        <CardsGrid
+          data={data}
+          sortBy={sortBy}
+          onSort={setSortBy}
+          platA={platA}
+          platB={platB}
+          yieldMode={yieldMode}
+          onYieldModeChange={setYieldMode}
+        />
       ) : !error ? (
         <div className="text-center py-16 text-gray-600 text-sm">Aucune donnée — clique Refresh</div>
       ) : null}
