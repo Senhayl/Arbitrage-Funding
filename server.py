@@ -219,11 +219,13 @@ def annualized_from_grvt(rate: float, interval_h: float) -> float:
     return rate * (8760 / interval_h)
 
 
-def annualized_from_extended(rate_pct: float, interval_h: float = 1.0) -> float:
+def annualized_from_extended(rate_decimal: float, interval_h: float = 1.0) -> float:
     """
-    rate_pct   : taux retourné par Extended déjà en % (ex: 0.000009 = 0.000009%/heure)
-    interval_h : intervalle de funding en heures (1h fixe pour Extended)
+    rate_decimal : taux brut Extended au format décimal
+                   (ex: -0.000192 == -0.0192% par heure)
+    interval_h   : intervalle de funding en heures
     """
+    rate_pct = rate_decimal * 100.0
     return rate_pct * (8760 / interval_h)
 
 
@@ -305,17 +307,17 @@ async def fetch_extended_all(client: httpx.AsyncClient) -> dict:
             if not name:
                 continue
 
-            # Le taux est déjà en % chez Extended — pas de conversion × 100
-            rate_pct = float(stats.get("fundingRate", 0))
+            # Extended renvoie un taux décimal (pas un pourcentage).
+            rate_decimal = float(stats.get("fundingRate", 0))
             # Intervalle fixe 1h pour tous les perps Extended
             interval_h = 1.0
 
             out[name] = {
                 "platform": "extended",
                 "instrument": name,
-                "funding_rate": round(rate_pct, 8),
+                "funding_rate": round(rate_decimal, 8),
                 "interval_hours": interval_h,
-                "annualized_rate_pct": round(annualized_from_extended(rate_pct, interval_h), 4),
+                "annualized_rate_pct": round(annualized_from_extended(rate_decimal, interval_h), 4),
                 "mark_price": float(stats.get("markPrice", 0)),
                 "source": "live",
             }
