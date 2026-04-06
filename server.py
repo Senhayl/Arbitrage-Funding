@@ -137,81 +137,129 @@ def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float
     return history
 
 
-def compute_stability(vals: list[float]) -> dict:
+# ── MODIFIÉ : compute_stability ───────────────────────────────────────────────
+def compute_stability(vals: list[float], timestamps: list[float] = None) -> dict:
     """
-    Calcule les indicateurs de stabilité sur une liste de valeurs APR.
+    Score de stabilité amélioré — 3 changements vs version précédente :
 
-    - mean_apr       : APR moyen sur la fenêtre
-    - consistency    : % de mesures positives (entre 0.0 et 1.0)
-    - volatility     : écart-type des mesures (plus c'est bas, plus c'est stable)
-    - stability_score: mean_apr × consistency × 1 / (1 + volatility)
+    1. Pondération exponentielle (demi-vie 24h) : une mesure récente compte
+       plus qu'une mesure ancienne. Une mesure d'il y a 24h vaut la moitié
+       d'une mesure de maintenant.
 
-    Le score est nul si moins de 3 mesures — pas assez de données pour être fiable.
+    2. Downside deviation (inspiré Sortino) : on ne pénalise que la volatilité
+       négative (valeurs < 0), pas la hausse. Une paire qui oscille entre
+       +5% et +15% n'est pas pénalisée comme une paire entre -5% et +15%.
+
+    3. Coefficient de tendance (régression linéaire) : bonus si le taux monte,
+       malus s'il descend. Borné entre -0.3 et +0.3.
+
+    Formule : mean_apr × consistency × (1 / (1 + downside_vol)) × (1 + trend_coef)
     """
     n = len(vals)
     if n < 3:
         return {
-            "mean_apr": None,
-            "consistency": None,
-            "volatility": None,
+            "mean_apr":        None,
+            "consistency":     None,
+            "volatility":      None,
+            "downside_vol":    None,
+            "trend_coef":      None,
             "stability_score": None,
-            "sample_count": n,
+            "sample_count":    n,
         }
 
-    mean_apr = sum(vals) / n
+    # ── 1. PONDÉRATION EXPONENTIELLE ─────────────────────────────────────────
+    # Demi-vie 24h : exp(-0.693 * age_en_secondes / 86400)
+    if timestamps and len(timestamps) == n:
+        t_max = max(timestamps)
+        half_life = 24 * 3600
+        raw_weights = [math.exp(-0.693 * (t_max - t) / half_life) for t in timestamps]
+    else:
+        # Sans timestamps : on pondère par position (dernière mesure = poids max)
+        raw_weights = [math.exp(0.693 * i / max(n - 1, 1)) for i in range(n)]
 
-    # Consistance : % de valeurs positives
-    positive_count = sum(1 for v in vals if v > 0)
-    consistency = positive_count / n
+    total_w = sum(raw_weights)
+    weights = [w / total_w for w in raw_weights]
 
-    # Volatilité : écart-type (population)
-    variance = sum((v - mean_apr) ** 2 for v in vals) / n
+    # ── 2. MOYENNE PONDÉRÉE ───────────────────────────────────────────────────
+    mean_apr = sum(w * v for w, v in zip(weights, vals))
+
+    # ── 3. CONSISTANCE PONDÉRÉE ───────────────────────────────────────────────
+    # Part du poids total sur les valeurs positives (vs simple % de count)
+    consistency = sum(w for w, v in zip(weights, vals) if v > 0)
+
+    # ── 4. DOWNSIDE DEVIATION ─────────────────────────────────────────────────
+    # Écart-type pondéré uniquement sur les valeurs négatives
+    downside_sq = sum(w * min(v, 0) ** 2 for w, v in zip(weights, vals))
+    downside_vol = math.sqrt(downside_sq)
+
+    # Volatilité totale conservée pour information
+    variance = sum(w * (v - mean_apr) ** 2 for w, v in zip(weights, vals))
     volatility = math.sqrt(variance)
 
-    # Score composite — on protège contre les APR négatifs (score = 0 si mean <= 0)
+    # ── 5. TENDANCE (régression linéaire simple) ──────────────────────────────
+    # Pente sur les indices (0..n-1) normalisée par la valeur absolue de mean_apr
+    x_mean = (n - 1) / 2
+    num = sum((i - x_mean) * v for i, v in enumerate(vals))
+    den = sum((i - x_mean) ** 2 for i in range(n))
+    slope = num / den if den > 0 else 0
+    trend_coef = max(-0.3, min(0.3, slope / (abs(mean_apr) + 1e-9)))
+
+    # ── 6. SCORE COMPOSITE ────────────────────────────────────────────────────
     if mean_apr <= 0:
         stability_score = 0.0
     else:
-        stability_score = round(mean_apr * consistency * (1 / (1 + volatility)), 3)
+        stability_score = round(
+            mean_apr
+            * consistency
+            * (1 / (1 + downside_vol))
+            * (1 + trend_coef),
+            3
+        )
 
     return {
-        "mean_apr": round(mean_apr, 3),
-        "consistency": round(consistency, 3),
-        "volatility": round(volatility, 3),
+        "mean_apr":        round(mean_apr, 3),
+        "consistency":     round(consistency, 3),
+        "volatility":      round(volatility, 3),
+        "downside_vol":    round(downside_vol, 3),
+        "trend_coef":      round(trend_coef, 3),
         "stability_score": stability_score,
-        "sample_count": n,
+        "sample_count":    n,
     }
 
 
+# ── MODIFIÉ : best_apr_windows ────────────────────────────────────────────────
 def best_apr_windows(history: dict, combo_key: str, symbol: str, now_ts: float) -> dict:
     combo = history.get(combo_key, {})
     samples = combo.get(symbol, [])
 
-    def filter_samples(window_seconds: int) -> list[float]:
-        return [
-            float(s.get("best_net_pct", 0))
-            for s in samples
+    def filter_samples(window_seconds: int) -> tuple:
+        filtered = [
+            s for s in samples
             if isinstance(s, dict)
             and isinstance(s.get("ts"), (int, float))
             and s["ts"] >= now_ts - window_seconds
         ]
+        # Triées par timestamp croissant pour la régression de tendance
+        filtered.sort(key=lambda s: s["ts"])
+        return (
+            [float(s.get("best_net_pct", 0)) for s in filtered],
+            [float(s["ts"]) for s in filtered],
+        )
 
-    vals_7d  = filter_samples(7  * 24 * 3600)
-    vals_30d = filter_samples(30 * 24 * 3600)
+    vals_7d,  ts_7d  = filter_samples(7  * 24 * 3600)
+    vals_30d, ts_30d = filter_samples(30 * 24 * 3600)
 
-    stability_7d  = compute_stability(vals_7d)
-    stability_30d = compute_stability(vals_30d)
+    # On passe les timestamps à compute_stability pour la pondération exponentielle
+    stability_7d  = compute_stability(vals_7d,  ts_7d)
+    stability_30d = compute_stability(vals_30d, ts_30d)
 
     return {
-        # Anciennes métriques conservées pour compatibilité
         "best_7d_apr_pct":  round(max(vals_7d),  3) if vals_7d  else None,
         "best_30d_apr_pct": round(max(vals_30d), 3) if vals_30d else None,
-        "samples_7d":  len(vals_7d),
-        "samples_30d": len(vals_30d),
-
-        # Nouvelles métriques de stabilité
-        "stability_7d":  stability_7d,
-        "stability_30d": stability_30d,
+        "samples_7d":       len(vals_7d),
+        "samples_30d":      len(vals_30d),
+        "stability_7d":     stability_7d,
+        "stability_30d":    stability_30d,
     }
 
 
