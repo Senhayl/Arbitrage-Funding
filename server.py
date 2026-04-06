@@ -140,90 +140,114 @@ def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float
 # ── MODIFIÉ : compute_stability ───────────────────────────────────────────────
 def compute_stability(vals: list[float], timestamps: list[float] = None) -> dict:
     """
-    Score de stabilité amélioré — 3 changements vs version précédente :
+    Score orienté "capture réelle" du funding, robuste aux faux pics d'APY.
 
-    1. Pondération exponentielle (demi-vie 24h) : une mesure récente compte
-       plus qu'une mesure ancienne. Une mesure d'il y a 24h vaut la moitié
-       d'une mesure de maintenant.
-
-    2. Downside deviation (inspiré Sortino) : on ne pénalise que la volatilité
-       négative (valeurs < 0), pas la hausse. Une paire qui oscille entre
-       +5% et +15% n'est pas pénalisée comme une paire entre -5% et +15%.
-
-    3. Coefficient de tendance (régression linéaire) : bonus si le taux monte,
-       malus s'il descend. Borné entre -0.3 et +0.3.
-
-    Formule : mean_apr × consistency × (1 / (1 + downside_vol)) × (1 + trend_coef)
+    Principes:
+    - APR conservateur: on limite l'optimisme via min(mean pondérée, médiane, dernier point).
+    - Pénalité de rupture de régime: si le dernier point diverge trop de la médiane,
+      on réduit fortement le score (cas classique des spikes qui s'écrasent avant snapshot).
+    - Pénalité de volatilité robuste (MAD) + downside deviation + flips de signe.
     """
     n = len(vals)
-    if n < 3:
+    if n < 6:
         return {
-            "mean_apr":        None,
-            "consistency":     None,
-            "volatility":      None,
-            "downside_vol":    None,
-            "trend_coef":      None,
-            "stability_score": None,
-            "sample_count":    n,
+            "mean_apr":            None,
+            "conservative_apr":    None,
+            "consistency":         None,
+            "volatility":          None,
+            "downside_vol":        None,
+            "robust_vol":          None,
+            "trend_coef":          None,
+            "regime_shift":        None,
+            "flip_rate":           None,
+            "sample_confidence":   round(min(1.0, n / 24), 3),
+            "stability_score":     None,
+            "sample_count":        n,
         }
 
-    # ── 1. PONDÉRATION EXPONENTIELLE ─────────────────────────────────────────
-    # Demi-vie 24h : exp(-0.693 * age_en_secondes / 86400)
+    def _median(seq: list[float]) -> float:
+        s = sorted(seq)
+        m = len(s) // 2
+        return s[m] if len(s) % 2 == 1 else (s[m - 1] + s[m]) / 2
+
+    # Pondération exponentielle: demi-vie courte pour capter vite les changements.
     if timestamps and len(timestamps) == n:
         t_max = max(timestamps)
-        half_life = 24 * 3600
+        half_life = 12 * 3600
         raw_weights = [math.exp(-0.693 * (t_max - t) / half_life) for t in timestamps]
     else:
-        # Sans timestamps : on pondère par position (dernière mesure = poids max)
         raw_weights = [math.exp(0.693 * i / max(n - 1, 1)) for i in range(n)]
 
     total_w = sum(raw_weights)
     weights = [w / total_w for w in raw_weights]
 
-    # ── 2. MOYENNE PONDÉRÉE ───────────────────────────────────────────────────
     mean_apr = sum(w * v for w, v in zip(weights, vals))
+    median_apr = _median(vals)
+    last_apr = vals[-1]
 
-    # ── 3. CONSISTANCE PONDÉRÉE ───────────────────────────────────────────────
-    # Part du poids total sur les valeurs positives (vs simple % de count)
+    # APR utilisé pour scorer: prudent, pour éviter d'acheter un pic éphémère.
+    conservative_apr = min(mean_apr, median_apr, last_apr)
+
     consistency = sum(w for w, v in zip(weights, vals) if v > 0)
 
-    # ── 4. DOWNSIDE DEVIATION ─────────────────────────────────────────────────
-    # Écart-type pondéré uniquement sur les valeurs négatives
-    downside_sq = sum(w * min(v, 0) ** 2 for w, v in zip(weights, vals))
-    downside_vol = math.sqrt(downside_sq)
-
-    # Volatilité totale conservée pour information
     variance = sum(w * (v - mean_apr) ** 2 for w, v in zip(weights, vals))
     volatility = math.sqrt(variance)
 
-    # ── 5. TENDANCE (régression linéaire simple) ──────────────────────────────
-    # Pente sur les indices (0..n-1) normalisée par la valeur absolue de mean_apr
+    downside_sq = sum(w * min(v, 0) ** 2 for w, v in zip(weights, vals))
+    downside_vol = math.sqrt(downside_sq)
+
+    abs_dev = [abs(v - median_apr) for v in vals]
+    mad = _median(abs_dev)
+    robust_vol = 1.4826 * mad
+
     x_mean = (n - 1) / 2
     num = sum((i - x_mean) * v for i, v in enumerate(vals))
     den = sum((i - x_mean) ** 2 for i in range(n))
     slope = num / den if den > 0 else 0
     trend_coef = max(-0.3, min(0.3, slope / (abs(mean_apr) + 1e-9)))
 
-    # ── 6. SCORE COMPOSITE ────────────────────────────────────────────────────
-    if mean_apr <= 0:
+    # Mesure de rupture de régime entre le dernier point et le régime central.
+    regime_shift = abs(last_apr - median_apr) / (abs(median_apr) + 1.0)
+
+    non_zero_signs = [1 if v > 0 else -1 for v in vals if v != 0]
+    flips = sum(1 for i in range(1, len(non_zero_signs)) if non_zero_signs[i] != non_zero_signs[i - 1])
+    flip_rate = flips / max(1, len(non_zero_signs) - 1)
+
+    sample_confidence = min(1.0, n / 24)
+
+    if conservative_apr <= 0:
         stability_score = 0.0
     else:
+        regime_penalty = 1 / (1 + 1.8 * regime_shift)
+        volatility_penalty = 1 / (1 + 0.30 * robust_vol + 0.15 * volatility)
+        downside_penalty = 1 / (1 + downside_vol)
+        flip_penalty = 1 / (1 + 2.0 * flip_rate)
+
         stability_score = round(
-            mean_apr
+            conservative_apr
             * consistency
-            * (1 / (1 + downside_vol))
+            * sample_confidence
+            * regime_penalty
+            * volatility_penalty
+            * downside_penalty
+            * flip_penalty
             * (1 + trend_coef),
-            3
+            3,
         )
 
     return {
-        "mean_apr":        round(mean_apr, 3),
-        "consistency":     round(consistency, 3),
-        "volatility":      round(volatility, 3),
-        "downside_vol":    round(downside_vol, 3),
-        "trend_coef":      round(trend_coef, 3),
-        "stability_score": stability_score,
-        "sample_count":    n,
+        "mean_apr":          round(mean_apr, 3),
+        "conservative_apr":  round(conservative_apr, 3),
+        "consistency":       round(consistency, 3),
+        "volatility":        round(volatility, 3),
+        "downside_vol":      round(downside_vol, 3),
+        "robust_vol":        round(robust_vol, 3),
+        "trend_coef":        round(trend_coef, 3),
+        "regime_shift":      round(regime_shift, 3),
+        "flip_rate":         round(flip_rate, 3),
+        "sample_confidence": round(sample_confidence, 3),
+        "stability_score":   stability_score,
+        "sample_count":      n,
     }
 
 

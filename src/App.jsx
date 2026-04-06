@@ -474,7 +474,7 @@ function PairCard({ row, platA, platB, yieldMode }) {
             </div>
           ) : (
             <div className="text-xs font-bold" style={{ color: scoreColor }}
-              title={`Score: ${score} | Moyenne: ${stab?.mean_apr}% | Consistance: ${(stab?.consistency * 100).toFixed(0)}% | Volatilité: ${stab?.volatility}`}>
+              title={`Score: ${score} | APR conservateur: ${stab?.conservative_apr}% | Moyenne: ${stab?.mean_apr}% | Consistance: ${(stab?.consistency * 100).toFixed(0)}% | Volatilité: ${stab?.volatility} | Rupture régime: ${stab?.regime_shift} | Flips: ${stab?.flip_rate}`}>
               {score.toFixed(1)} <span className="font-normal opacity-70">{scoreLabel}</span>
             </div>
           )}
