@@ -387,8 +387,6 @@ function PairCard({ row, platA, platB, yieldMode }) {
   const isPos     = opp.best_net_pct > 0
   const shortPlat = opp.short_platform
   const longPlat  = opp.long_platform
-  const annualBRate = side_b?.annualized_rate_pct ?? 0
-  const bRate = toDisplayYieldPct(annualBRate, yieldMode)
   const aSrc      = side_a?.source ?? "mock"
   const bSrc      = side_b?.source ?? "mock"
 
@@ -465,14 +463,8 @@ function PairCard({ row, platA, platB, yieldMode }) {
         ))}
       </div>
 
-      {/* Footer — 3 colonnes : Rate B / Stabilité / Sources */}
+      {/* Footer — 2 colonnes : Stabilité / Sources */}
       <div className="grid grid-cols-2 gap-1 px-3 pb-3 pt-1">
-        <div>
-          <div className="text-xs font-mono font-semibold" style={{ color: bRate > 0 ? "#f8a" : bRate < 0 ? "#8f8" : "#9ca3af" }}>
-            {normalizedPct(bRate, 2)}%{yieldUnitLabel(yieldMode)}
-          </div>
-        </div>
-
         {/* Score de stabilité */}
         <div>
           <div className="text-xs text-gray-700 uppercase tracking-wide mb-0.5">Stabilité</div>
