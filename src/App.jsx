@@ -782,22 +782,33 @@ export default function App() {
       const row = freshData.find((r) => r.symbol === pos.symbol)
 
       // ── 1. ALERTE LIQUIDATION ──────────────────────────────────────────────
-      // On a besoin du prix actuel — on l'estime via le prix d'entrée moyen
-      // des deux sides (approximation acceptable sans flux de prix temps réel)
-      const avgEntry = (pos.short.entry_price + pos.long.entry_price) / 2
+      const markPriceFor = (platformId) => {
+        if (!row) return null
+        if (row.side_a?.platform === platformId) return Number(row.side_a?.mark_price)
+        if (row.side_b?.platform === platformId) return Number(row.side_b?.mark_price)
+        return null
+      }
 
-      const shortLiqDist = Math.abs(pos.short.liq_price - avgEntry) / avgEntry
-      const longLiqDist  = Math.abs(pos.long.liq_price  - avgEntry) / avgEntry
+      const shortMark = markPriceFor(pos.short.platform)
+      const longMark  = markPriceFor(pos.long.platform)
 
-      // Alerte si la liquidation est à moins de 20% du prix d'entrée
-      if (shortLiqDist < 0.20) {
+      const shortLiqDist = Number.isFinite(shortMark) && shortMark > 0
+        ? Math.abs(pos.short.liq_price - shortMark) / shortMark
+        : null
+      const longLiqDist = Number.isFinite(longMark) && longMark > 0
+        ? Math.abs(pos.long.liq_price - longMark) / longMark
+        : null
+
+      // Alerte si la liquidation est à moins de 20% du prix actuel (mark price)
+      if (shortLiqDist !== null && shortLiqDist < 0.20) {
         const key = `liq-short-${pos.id}`
         if (!sentAlerts.current.has(key)) {
           await sendTelegram(
             `⚠️ LIQUIDATION PROCHE — ${pos.symbol} SHORT\n` +
             `Plateforme : ${pos.short.platform.toUpperCase()}\n` +
+            `Prix actuel : $${shortMark}\n` +
             `Prix liq : $${pos.short.liq_price}\n` +
-            `Distance : ${(shortLiqDist * 100).toFixed(1)}% du prix d'entrée\n` +
+            `Distance : ${(shortLiqDist * 100).toFixed(1)}% du prix actuel\n` +
             `Levier : ${pos.short.leverage}x`
           )
           sentAlerts.current.add(key)
@@ -807,14 +818,15 @@ export default function App() {
         sentAlerts.current.delete(`liq-short-${pos.id}`)
       }
 
-      if (longLiqDist < 0.20) {
+      if (longLiqDist !== null && longLiqDist < 0.20) {
         const key = `liq-long-${pos.id}`
         if (!sentAlerts.current.has(key)) {
           await sendTelegram(
             `⚠️ LIQUIDATION PROCHE — ${pos.symbol} LONG\n` +
             `Plateforme : ${pos.long.platform.toUpperCase()}\n` +
+            `Prix actuel : $${longMark}\n` +
             `Prix liq : $${pos.long.liq_price}\n` +
-            `Distance : ${(longLiqDist * 100).toFixed(1)}% du prix d'entrée\n` +
+            `Distance : ${(longLiqDist * 100).toFixed(1)}% du prix actuel\n` +
             `Levier : ${pos.long.leverage}x`
           )
           sentAlerts.current.add(key)
