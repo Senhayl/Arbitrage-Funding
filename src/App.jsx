@@ -781,7 +781,7 @@ export default function App() {
     for (const pos of positions) {
       const row = freshData.find((r) => r.symbol === pos.symbol)
 
-      // ── 1. ALERTE LIQUIDATION ──────────────────────────────────────────────
+      // ── 1. ALERTE RISQUE GLOBAL (LIQUIDATION) ─────────────────────────────
       const markPriceFor = (platformId) => {
         if (!row) return null
         if (row.side_a?.platform === platformId) return Number(row.side_a?.mark_price)
@@ -799,40 +799,44 @@ export default function App() {
         ? Math.abs(pos.long.liq_price - longMark) / longMark
         : null
 
-      // Alerte si la liquidation est à moins de 20% du prix actuel (mark price)
-      if (shortLiqDist !== null && shortLiqDist < 0.20) {
-        const key = `liq-short-${pos.id}`
-        if (!sentAlerts.current.has(key)) {
-          await sendTelegram(
-            `⚠️ LIQUIDATION PROCHE — ${pos.symbol} SHORT\n` +
-            `Plateforme : ${pos.short.platform.toUpperCase()}\n` +
-            `Prix actuel : $${shortMark}\n` +
-            `Prix liq : $${pos.short.liq_price}\n` +
-            `Distance : ${(shortLiqDist * 100).toFixed(1)}% du prix actuel\n` +
-            `Levier : ${pos.short.leverage}x`
-          )
-          sentAlerts.current.add(key)
-        }
-      } else {
-        // Si le danger est passé, on réinitialise pour pouvoir alerter à nouveau
-        sentAlerts.current.delete(`liq-short-${pos.id}`)
-      }
+      const globalLiqKey = `liq-global-${pos.id}`
+      const hasBothMarks = shortLiqDist !== null && longLiqDist !== null
+      if (hasBothMarks) {
+        const minDist = Math.min(shortLiqDist, longLiqDist)
+        const asymmetry = Math.abs(shortLiqDist - longLiqDist)
+        const shortNotional = (Number(pos.short.size_usd) || 0) * (Number(pos.short.leverage) || 0)
+        const longNotional = (Number(pos.long.size_usd) || 0) * (Number(pos.long.leverage) || 0)
+        const denom = Math.max(shortNotional, longNotional, 1)
+        const deltaImbalance = Math.abs(shortNotional - longNotional) / denom
 
-      if (longLiqDist !== null && longLiqDist < 0.20) {
-        const key = `liq-long-${pos.id}`
-        if (!sentAlerts.current.has(key)) {
-          await sendTelegram(
-            `⚠️ LIQUIDATION PROCHE — ${pos.symbol} LONG\n` +
-            `Plateforme : ${pos.long.platform.toUpperCase()}\n` +
-            `Prix actuel : $${longMark}\n` +
-            `Prix liq : $${pos.long.liq_price}\n` +
-            `Distance : ${(longLiqDist * 100).toFixed(1)}% du prix actuel\n` +
-            `Levier : ${pos.long.leverage}x`
-          )
-          sentAlerts.current.add(key)
+        const isCritical = minDist < 0.08
+        const isWarning = minDist < 0.15 && (asymmetry > 0.08 || deltaImbalance > 0.10)
+        const shouldAlert = isCritical || isWarning
+
+        if (shouldAlert) {
+          if (!sentAlerts.current.has(globalLiqKey)) {
+            const reason = isCritical
+              ? "distance de liquidation très faible"
+              : asymmetry > 0.08
+                ? "asymétrie de risque entre les deux jambes"
+                : "déséquilibre notionnel"
+
+            await sendTelegram(
+              `⚠️ RISQUE GLOBAL — ${pos.symbol}\n` +
+              `Raison : ${reason}\n` +
+              `Distance SHORT : ${(shortLiqDist * 100).toFixed(1)}% (${pos.short.platform.toUpperCase()})\n` +
+              `Distance LONG : ${(longLiqDist * 100).toFixed(1)}% (${pos.long.platform.toUpperCase()})\n` +
+              `Asymétrie : ${(asymmetry * 100).toFixed(1)}%\n` +
+              `Delta imbalance : ${(deltaImbalance * 100).toFixed(1)}%`
+            )
+            sentAlerts.current.add(globalLiqKey)
+          }
+        } else {
+          sentAlerts.current.delete(globalLiqKey)
         }
       } else {
-        sentAlerts.current.delete(`liq-long-${pos.id}`)
+        // Sans mark price fiable des deux côtés, on évite les faux positifs.
+        sentAlerts.current.delete(globalLiqKey)
       }
 
       // ── 2. ALERTE FUNDING BAS ──────────────────────────────────────────────
