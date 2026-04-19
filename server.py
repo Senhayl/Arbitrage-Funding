@@ -111,16 +111,11 @@ def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float
     # On garde 30 jours glissants de mesures
     cutoff_30d = now_ts - (30 * 24 * 3600)
 
-    row_by_symbol = {}
-    for row in rows:
-        if not isinstance(row, dict) or "symbol" not in row or "opportunity" not in row:
-            continue
-
-        opp = row.get("opportunity_history") or row.get("opportunity") or {}
-        row_by_symbol[row["symbol"]] = {
-            "best_net_pct": float(opp.get("best_net_pct", 0)),
-            "best_strategy": opp.get("best_strategy") if isinstance(opp.get("best_strategy"), str) else None,
-        }
+    row_by_symbol = {
+        row["symbol"]: float(row["opportunity"]["best_net_pct"])
+        for row in rows
+        if isinstance(row, dict) and "symbol" in row and "opportunity" in row
+    }
 
     symbols_to_track = []
     if all_symbols:
@@ -132,12 +127,7 @@ def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float
         samples = combo.setdefault(symbol, [])
 
         if symbol in row_by_symbol:
-            snap = row_by_symbol[symbol]
-            samples.append({
-                "ts": now_ts,
-                "best_net_pct": snap["best_net_pct"],
-                "best_strategy": snap.get("best_strategy"),
-            })
+            samples.append({"ts": now_ts, "best_net_pct": row_by_symbol[symbol]})
 
         combo[symbol] = [
             s
@@ -151,7 +141,7 @@ def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float
 
 
 # ── MODIFIÉ : compute_stability ───────────────────────────────────────────────
-def compute_stability(vals: list[float], timestamps: list[float] = None, strategies: list[str] = None) -> dict:
+def compute_stability(vals: list[float], timestamps: list[float] = None) -> dict:
     """
     Score orienté "capture réelle" du funding, robuste aux faux pics d'APY.
 
@@ -222,26 +212,9 @@ def compute_stability(vals: list[float], timestamps: list[float] = None, strateg
     # Mesure de rupture de régime entre le dernier point et le régime central.
     regime_shift = abs(last_apr - median_apr) / (abs(median_apr) + 1.0)
 
-    valid_strategies = []
-    if strategies and len(strategies) == n:
-        valid_strategies = [
-            s
-            for s in strategies
-            if s in {"short_a_long_b", "long_a_short_b"}
-        ]
-
-    if len(valid_strategies) >= 2:
-        flips = sum(
-            1
-            for i in range(1, len(valid_strategies))
-            if valid_strategies[i] != valid_strategies[i - 1]
-        )
-        flip_rate = flips / max(1, len(valid_strategies) - 1)
-    else:
-        # Fallback legacy: anciens snapshots sans best_strategy.
-        non_zero_signs = [1 if v > 0 else -1 for v in vals if v != 0]
-        flips = sum(1 for i in range(1, len(non_zero_signs)) if non_zero_signs[i] != non_zero_signs[i - 1])
-        flip_rate = flips / max(1, len(non_zero_signs) - 1)
+    non_zero_signs = [1 if v > 0 else -1 for v in vals if v != 0]
+    flips = sum(1 for i in range(1, len(non_zero_signs)) if non_zero_signs[i] != non_zero_signs[i - 1])
+    flip_rate = flips / max(1, len(non_zero_signs) - 1)
 
     sample_confidence = min(1.0, n / 24)
 
@@ -298,15 +271,14 @@ def best_apr_windows(history: dict, combo_key: str, symbol: str, now_ts: float) 
         return (
             [float(s.get("best_net_pct", 0)) for s in filtered],
             [float(s["ts"]) for s in filtered],
-            [s.get("best_strategy") if isinstance(s.get("best_strategy"), str) else None for s in filtered],
         )
 
-    vals_7d,  ts_7d,  strat_7d  = filter_samples(7  * 24 * 3600)
-    vals_30d, ts_30d, strat_30d = filter_samples(30 * 24 * 3600)
+    vals_7d,  ts_7d  = filter_samples(7  * 24 * 3600)
+    vals_30d, ts_30d = filter_samples(30 * 24 * 3600)
 
     # On passe les timestamps à compute_stability pour la pondération exponentielle
-    stability_7d  = compute_stability(vals_7d,  ts_7d,  strat_7d)
-    stability_30d = compute_stability(vals_30d, ts_30d, strat_30d)
+    stability_7d  = compute_stability(vals_7d,  ts_7d)
+    stability_30d = compute_stability(vals_30d, ts_30d)
 
     return {
         "best_7d_apr_pct":  round(max(vals_7d),  3) if vals_7d  else None,
