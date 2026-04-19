@@ -566,6 +566,7 @@ function CardsGrid({ data, sortBy, onSort, platA, platB, yieldMode, onYieldModeC
 // ── POSITIONS ─────────────────────────────────────────────────────────────────
 
 function PositionForm({ onSave, onCancel, symbols }) {
+  const nextTradeIdRef = useRef(1)
   const [form, setForm] = useState({
     symbol: symbols[0] ?? "BTC/USD",
     shortPlat: "extended", shortEntry: "", shortLev: 3, shortSize: 100,
@@ -574,18 +575,16 @@ function PositionForm({ onSave, onCancel, symbols }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
   const shortLiq = form.shortEntry ? calcLiq(+form.shortEntry, +form.shortLev, "short") : null
   const longLiq  = form.longEntry  ? calcLiq(+form.longEntry,  +form.longLev,  "long")  : null
-
-  useEffect(() => {
-    if (!symbols.length) return
-    if (!symbols.includes(form.symbol)) {
-      setForm((f) => ({ ...f, symbol: symbols[0] }))
-    }
-  }, [symbols, form.symbol])
+  const selectedSymbol = symbols.includes(form.symbol)
+    ? form.symbol
+    : (symbols[0] ?? "BTC/USD")
 
   const handleSave = () => {
     if (!form.shortEntry || !form.longEntry) return alert("Entrez les prix d'entrée")
+    const tradeId = `trade_${nextTradeIdRef.current}`
+    nextTradeIdRef.current += 1
     onSave({
-      id: "trade_" + Date.now(), symbol: form.symbol,
+      id: tradeId, symbol: selectedSymbol,
       short: { platform: form.shortPlat, entry_price: +form.shortEntry, leverage: +form.shortLev, size_usd: +form.shortSize, liq_price: shortLiq },
       long:  { platform: form.longPlat,  entry_price: +form.longEntry,  leverage: +form.longLev,  size_usd: +form.longSize,  liq_price: longLiq  },
       created_at: new Date().toISOString(),
@@ -596,7 +595,7 @@ function PositionForm({ onSave, onCancel, symbols }) {
     <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
       <div className="flex items-center gap-3 mb-4">
         <label className="text-xs text-gray-500 uppercase tracking-wide">Paire</label>
-        <select value={form.symbol} onChange={set("symbol")}
+        <select value={selectedSymbol} onChange={set("symbol")}
           className="bg-white/10 border border-white/15 text-white rounded-md px-2 py-1 text-sm font-bold">
           {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -710,8 +709,19 @@ function PositionsPanel({ apiUrl }) {
     }
   }, [apiUrl])
 
-  useEffect(() => { load() }, [load])
-  useEffect(() => { loadSymbols() }, [loadSymbols])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      load()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [load])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadSymbols()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [loadSymbols])
 
   const handleSave = async (trade) => {
     try {
