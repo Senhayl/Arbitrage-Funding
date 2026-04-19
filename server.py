@@ -363,29 +363,7 @@ def compute_opp_for_history(side_a: dict, side_b: dict) -> dict:
         hist_b["annualized_rate_pct"] = float(hist_b.get("annualized_rate_pct_settled", hist_b.get("annualized_rate_pct", 0)))
     return compute_opp(hist_a, hist_b)
 
-def is_side_live_and_available(side: Optional[dict]) -> bool:
-    """
-    Valide qu'un side correspond à un marché réellement disponible.
-    Empêche d'afficher une carte si la paire n'existe pas (ou plus) sur une plateforme.
-    """
-    if not isinstance(side, dict):
-        return False
-    if side.get("source") != "live":
-        return False
 
-    instrument = side.get("instrument")
-    if not isinstance(instrument, str) or not instrument.strip():
-        return False
-
-    mark_price = side.get("mark_price")
-    try:
-        if float(mark_price) <= 0:
-            return False
-    except (TypeError, ValueError):
-        return False
-
-    return True
-	
 async def fetch_grvt(instrument: str, client: httpx.AsyncClient) -> dict:
     try:
         settled_resp = await client.post(
@@ -531,7 +509,7 @@ async def get_funding(platform_a: str = "extended", platform_b: str = "grvt"):
         raise HTTPException(status_code=400, detail="plateforme non supportee")
 
     async with httpx.AsyncClient() as http:
-        grvt_tasks = asyncio.gather(*[fetch_grvt(pair["grvt"], http) for pair in PAIRS])
+        grvt_tasks    = asyncio.gather(*[fetch_grvt(pair["grvt"], http) for pair in PAIRS])
         extended_task = fetch_extended_all(http)
         grvt_list, extended_map = await asyncio.gather(grvt_tasks, extended_task)
 
@@ -542,22 +520,24 @@ async def get_funding(platform_a: str = "extended", platform_b: str = "grvt"):
         side_a = grvt_by_symbol[pair["symbol"]] if platform_a == "grvt" else extended_map.get(pair["extended"])
         side_b = grvt_by_symbol[pair["symbol"]] if platform_b == "grvt" else extended_map.get(pair["extended"])
 
-        if not is_side_live_and_available(side_a) or not is_side_live_and_available(side_b):
+        if not side_a or not side_b:
+            continue
+        if side_a.get("source") == "unavailable" or side_b.get("source") == "unavailable":
             continue
 
         rows.append({
-            "symbol": pair["symbol"],
+            "symbol":     pair["symbol"],
             "platform_a": platform_a,
             "platform_b": platform_b,
-            "side_a": side_a,
-            "side_b": side_b,
+            "side_a":     side_a,
+            "side_b":     side_b,
             "opportunity": compute_opp(side_a, side_b),
             "opportunity_history": compute_opp_for_history(side_a, side_b),
         })
 
     rows.sort(key=lambda item: item["opportunity"]["best_net_pct"], reverse=True)
 
-    now_ts = datetime.now(timezone.utc).timestamp()
+    now_ts    = datetime.now(timezone.utc).timestamp()
     combo_key = f"{platform_a}__{platform_b}"
 
     history = load_history()
@@ -570,10 +550,10 @@ async def get_funding(platform_a: str = "extended", platform_b: str = "grvt"):
     save_history(history)
 
     return {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp":  datetime.utcnow().isoformat() + "Z",
         "platform_a": platform_a,
         "platform_b": platform_b,
-        "pairs": rows,
+        "pairs":      rows,
         "sources": {
             f"{platform_a}_live": sum(1 for row in rows if row["side_a"]["source"] == "live"),
             f"{platform_b}_live": sum(1 for row in rows if row["side_b"]["source"] == "live"),
