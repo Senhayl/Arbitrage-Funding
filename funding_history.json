@@ -4,55 +4,572 @@
       {
         "ts": 1774370606.371231,
         "best_net_pct": 23.323
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 17.958,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
       }
     ],
     "LINK/USD": [
       {
         "ts": 1774370606.371231,
         "best_net_pct": 16.973
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 12.702,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 21.462,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 21.462,
+        "best_strategy": "short_a_long_b"
       }
     ],
     "XRP/USD": [
       {
         "ts": 1774370606.371231,
         "best_net_pct": 14.454
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 42.924,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 23.652,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 23.652,
+        "best_strategy": "long_a_short_b"
       }
     ],
     "ETH/USD": [
       {
         "ts": 1774370606.371231,
         "best_net_pct": 6.022
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 26.718,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 17.082,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 10.074,
+        "best_strategy": "long_a_short_b"
       }
     ],
     "BTC/USD": [
       {
         "ts": 1774370606.371231,
         "best_net_pct": 5.365
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 30.77,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 15.877,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 21.133,
+        "best_strategy": "long_a_short_b"
       }
     ],
     "AVAX/USD": [
       {
         "ts": 1774370606.371231,
         "best_net_pct": 4.708
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 35.478,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 15.33,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 10.95,
+        "best_strategy": "long_a_short_b"
       }
     ],
     "ARB/USD": [
       {
         "ts": 1774370606.371231,
         "best_net_pct": 0.438
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 27.265,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 6.241,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 38.654,
+        "best_strategy": "long_a_short_b"
       }
     ],
     "DOGE/USD": [
       {
         "ts": 1774370606.371231,
         "best_net_pct": 0.438
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 11.169,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 4.599,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 4.599,
+        "best_strategy": "short_a_long_b"
       }
     ],
     "OP/USD": [
       {
         "ts": 1774370606.371231,
         "best_net_pct": 0.438
+      },
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
       }
-    ]
+    ],
+    "AAVE/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 12.155,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 12.155,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 1.862,
+        "best_strategy": "long_a_short_b"
+      }
+    ],
+    "CRV/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 5.585,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 30.112,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 0.547,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "ENA/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 1.971,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 2.409,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 13.578,
+        "best_strategy": "long_a_short_b"
+      }
+    ],
+    "HYPE/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 63.291,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 37.011,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 47.961,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "KAITO/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 16.863,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 36.135,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 54.531,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "AVNT/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 6.789,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 2.409,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 20.367,
+        "best_strategy": "long_a_short_b"
+      }
+    ],
+    "SUI/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 10.074,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "WIF/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 30.66,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 35.916,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 56.064,
+        "best_strategy": "long_a_short_b"
+      }
+    ],
+    "LTC/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 22.338,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 3.066,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 11.826,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "UNI/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 43.362,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 32.85,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 14.454,
+        "best_strategy": "long_a_short_b"
+      }
+    ],
+    "TIA/USD": [],
+    "MKR/USD": [],
+    "SNX/USD": [],
+    "WLD/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "PENGU/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 17.082,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 7.446,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 31.317,
+        "best_strategy": "long_a_short_b"
+      }
+    ],
+    "MNT/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 11.388,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 11.388,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 11.388,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "XLM/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 35.587,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 31.207,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 4.928,
+        "best_strategy": "long_a_short_b"
+      }
+    ],
+    "APT/USD": [],
+    "POPCAT/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 61.539,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 61.539,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "ATOM/USD": [],
+    "BNB/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 2.957,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 2.957,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 2.957,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "DOT/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 220.095,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 50.151,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 91.761,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "FIL/USD": [],
+    "BCH/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 56.392,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 18.724,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 17.192,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "ADA/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 24.528,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 19.272,
+        "best_strategy": "long_a_short_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 28.908,
+        "best_strategy": "long_a_short_b"
+      }
+    ],
+    "EIGEN/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 30.879,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "JUP/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 5.913,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 5.913,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "LDO/USD": [
+      {
+        "ts": 1776107645.830707,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776109529.723798,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      },
+      {
+        "ts": 1776115007.598307,
+        "best_net_pct": 0.438,
+        "best_strategy": "short_a_long_b"
+      }
+    ],
+    "HBAR/USD": [],
+    "ICP/USD": []
   }
 }

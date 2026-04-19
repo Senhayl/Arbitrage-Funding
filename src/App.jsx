@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react"
 
 // ── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? "http://localhost:8000" : "https://back-end-production-5712.up.railway.app")
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"])
+const API_URL = import.meta.env.VITE_API_URL || (LOCAL_HOSTNAMES.has(window.location.hostname) ? "http://127.0.0.1:8000" : window.location.origin)
 
 const parseJsonOrThrow = async (response, label) => {
   const raw = await response.text()

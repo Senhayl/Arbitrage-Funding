@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 import math
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -22,6 +24,7 @@ app.add_middleware(
 )
 
 GRVT_BASE = "https://market-data.grvt.io"
+GRVT_UI_BASE = os.getenv("GRVT_UI_BASE", "https://api.grvt.io")
 EXTENDED_BASE = "https://api.starknet.extended.exchange/api/v1"
 POSITIONS_FILE = Path("positions.json")
 HISTORY_FILE = Path("funding_history.json")
@@ -102,7 +105,7 @@ def save_history(history: dict) -> None:
     HISTORY_FILE.write_text(json.dumps(history, indent=2))
 
 
-def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float, all_symbols: list[str] | None = None) -> dict:
+def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float, all_symbols: Optional[list[str]] = None) -> dict:
     combo = history.setdefault(combo_key, {})
 
     # On garde 30 jours glissants de mesures
@@ -113,7 +116,7 @@ def add_history_samples(history: dict, combo_key: str, rows: list, now_ts: float
         if not isinstance(row, dict) or "symbol" not in row or "opportunity" not in row:
             continue
 
-        opp = row.get("opportunity") or {}
+        opp = row.get("opportunity_history") or row.get("opportunity") or {}
         row_by_symbol[row["symbol"]] = {
             "best_net_pct": float(opp.get("best_net_pct", 0)),
             "best_strategy": opp.get("best_strategy") if isinstance(opp.get("best_strategy"), str) else None,
@@ -350,19 +353,52 @@ def compute_opp(side_a: dict, side_b: dict) -> dict:
     }
 
 
+def compute_opp_for_history(side_a: dict, side_b: dict) -> dict:
+    # Backtracking/stabilite: pour GRVT on force le taux settled historique.
+    hist_a = dict(side_a)
+    hist_b = dict(side_b)
+    if hist_a.get("platform") == "grvt" and hist_a.get("annualized_rate_pct_settled") is not None:
+        hist_a["annualized_rate_pct"] = float(hist_a.get("annualized_rate_pct_settled", hist_a.get("annualized_rate_pct", 0)))
+    if hist_b.get("platform") == "grvt" and hist_b.get("annualized_rate_pct_settled") is not None:
+        hist_b["annualized_rate_pct"] = float(hist_b.get("annualized_rate_pct_settled", hist_b.get("annualized_rate_pct", 0)))
+    return compute_opp(hist_a, hist_b)
+
+def is_side_live_and_available(side: Optional[dict]) -> bool:
+    """
+    Valide qu'un side correspond à un marché réellement disponible.
+    Empêche d'afficher une carte si la paire n'existe pas (ou plus) sur une plateforme.
+    """
+    if not isinstance(side, dict):
+        return False
+    if side.get("source") != "live":
+        return False
+
+    instrument = side.get("instrument")
+    if not isinstance(instrument, str) or not instrument.strip():
+        return False
+
+    mark_price = side.get("mark_price")
+    try:
+        if float(mark_price) <= 0:
+            return False
+    except (TypeError, ValueError):
+        return False
+
+    return True
+	
 async def fetch_grvt(instrument: str, client: httpx.AsyncClient) -> dict:
     try:
-        response = await client.post(
+        settled_resp = await client.post(
             f"{GRVT_BASE}/full/v1/funding",
             json={"instrument": instrument, "limit": 1},
             timeout=8,
         )
-        response.raise_for_status()
-        entry = (response.json().get("result") or [])[0]
+        settled_resp.raise_for_status()
+        entry = (settled_resp.json().get("result") or [])[0]
 
-        rate = float(entry.get("funding_rate", 0))
+        settled_rate = float(entry.get("funding_rate", 0))
         interval_h = float(entry.get("funding_interval_hours", 8))
-        annualized = annualized_from_grvt(rate, interval_h)
+        annualized_settled = annualized_from_grvt(settled_rate, interval_h)
         funding_ns = entry.get("funding_time", 0)
 
         next_funding_time = None
@@ -370,12 +406,55 @@ async def fetch_grvt(instrument: str, client: httpx.AsyncClient) -> dict:
             next_ms = int(funding_ns) // 1_000_000 + int(interval_h * 3600 * 1000)
             next_funding_time = datetime.fromtimestamp(next_ms / 1000, tz=timezone.utc).isoformat()
 
+        # Valeur live card (proche UI): tentative via endpoint ticker, fallback settled.
+        live_rate = settled_rate
+        annualized_live = annualized_settled
+        try:
+            ticker_resp = await client.post(
+                f"{GRVT_UI_BASE}/full/v1/ticker",
+                json={"instrument": instrument},
+                timeout=6,
+            )
+            ticker_resp.raise_for_status()
+            ticker_payload = ticker_resp.json().get("result")
+            ticker = ticker_payload[0] if isinstance(ticker_payload, list) and ticker_payload else ticker_payload
+
+            if isinstance(ticker, dict):
+                annual_keys = [
+                    "annualized_funding_rate_pct",
+                    "funding_rate_annualized_pct",
+                    "annualizedFundingRate",
+                    "annualized_funding_rate",
+                ]
+                rate_keys = [
+                    "current_funding_rate",
+                    "next_funding_rate",
+                    "current_funding_rate_pct",
+                    "next_funding_rate_pct",
+                    "funding_rate",
+                    "fundingRate",
+                ]
+
+                annual_ui = next((ticker.get(k) for k in annual_keys if ticker.get(k) is not None), None)
+                rate_ui = next((ticker.get(k) for k in rate_keys if ticker.get(k) is not None), None)
+
+                if annual_ui is not None:
+                    annualized_live = float(annual_ui)
+                if rate_ui is not None:
+                    live_rate = float(rate_ui)
+                    if annual_ui is None:
+                        annualized_live = annualized_from_grvt(live_rate, interval_h)
+        except Exception as ticker_exc:
+            log.info("GRVT ticker fallback to settled for %s: %s", instrument, ticker_exc)
+
         return {
             "platform": "grvt",
             "instrument": instrument,
-            "funding_rate": round(rate, 8),
+            "funding_rate": round(live_rate, 8),
             "interval_hours": interval_h,
-            "annualized_rate_pct": round(annualized, 4),
+            "annualized_rate_pct": round(annualized_live, 4),
+            "funding_rate_settled": round(settled_rate, 8),
+            "annualized_rate_pct_settled": round(annualized_settled, 4),
             "mark_price": float(entry.get("mark_price", 0)),
             "next_funding_time": next_funding_time,
             "source": "live",
@@ -388,6 +467,8 @@ async def fetch_grvt(instrument: str, client: httpx.AsyncClient) -> dict:
             "funding_rate": 0,
             "interval_hours": 8.0,
             "annualized_rate_pct": 0,
+            "funding_rate_settled": 0,
+            "annualized_rate_pct_settled": 0,
             "mark_price": 0.0,
             "next_funding_time": None,
             "source": "unavailable",
@@ -461,11 +542,9 @@ async def get_funding(platform_a: str = "extended", platform_b: str = "grvt"):
         side_a = grvt_by_symbol[pair["symbol"]] if platform_a == "grvt" else extended_map.get(pair["extended"])
         side_b = grvt_by_symbol[pair["symbol"]] if platform_b == "grvt" else extended_map.get(pair["extended"])
 
-        if not side_a or not side_b:
-            continue
-        if side_a.get("source") == "unavailable" or side_b.get("source") == "unavailable":
-            continue
-
+        if not is_side_live_and_available(side_a) or not is_side_live_and_available(side_b):
+    		continue
+			
         rows.append({
             "symbol":     pair["symbol"],
             "platform_a": platform_a,
@@ -473,6 +552,7 @@ async def get_funding(platform_a: str = "extended", platform_b: str = "grvt"):
             "side_a":     side_a,
             "side_b":     side_b,
             "opportunity": compute_opp(side_a, side_b),
+            "opportunity_history": compute_opp_for_history(side_a, side_b),
         })
 
     rows.sort(key=lambda item: item["opportunity"]["best_net_pct"], reverse=True)
